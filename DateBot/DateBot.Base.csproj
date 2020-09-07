@@ -1,16 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <OutputType>Library</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DSharpPlus" Version="4.0.0-nightly-00711" />
-    <PackageReference Include="DSharpPlus.CommandsNext" Version="4.0.0-nightly-00711" />
-    <PackageReference Include="DSharpPlus.Interactivity" Version="4.0.0-nightly-00711" />
+    <PackageReference Include="DSharpPlus" Version="4.0.0-nightly-00721" />
+    <PackageReference Include="DSharpPlus.CommandsNext" Version="4.0.0-nightly-00721" />
+    <PackageReference Include="DSharpPlus.Interactivity" Version="4.0.0-nightly-00721" />
   </ItemGroup>
 
   <ItemGroup>
+	  <ProjectReference Include="..\ZBot\ZBot.csproj" />
 	  <ProjectReference Include="..\zLib.WPF\zLib.WPF.csproj" />
 	  <ProjectReference Include="..\zLib\zLib.csproj" />
   </ItemGroup>

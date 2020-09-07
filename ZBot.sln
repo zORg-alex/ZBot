@@ -5,13 +5,15 @@ VisualStudioVersion = 16.0.30225.117
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ZBot", "ZBot\ZBot.csproj", "{8EEF2731-1B3B-4F67-A536-3DA2ECEE52C3}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ZBot.WFP", "ZBot.WPF\ZBot.WFP.csproj", "{E0CA1DCB-2956-47FB-ABC5-042C93DA1B42}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DateBot", "DateBot\DateBot.csproj", "{B14CAEA5-0A10-4B2B-8BD1-E2CD2A2C98C8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DateBot.Base", "DateBot\DateBot.Base.csproj", "{B14CAEA5-0A10-4B2B-8BD1-E2CD2A2C98C8}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zLib", "zLib\zLib.csproj", "{6C64D79A-CA9A-40B3-99DF-7C11F79CCA35}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zLib.WPF", "zLib.WPF\zLib.WPF.csproj", "{EF64EC03-57FA-418B-BA8B-DCFD75A144F6}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bot.Console", "Bot.Console\Bot.Console.csproj", "{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DummyBot.ConsoleApp", "DummyBot.ConsoleApp\DummyBot.ConsoleApp.csproj", "{6558FE39-1889-4D16-BBC6-0CA634965231}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -23,10 +25,6 @@ Global
 		{8EEF2731-1B3B-4F67-A536-3DA2ECEE52C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8EEF2731-1B3B-4F67-A536-3DA2ECEE52C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8EEF2731-1B3B-4F67-A536-3DA2ECEE52C3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E0CA1DCB-2956-47FB-ABC5-042C93DA1B42}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E0CA1DCB-2956-47FB-ABC5-042C93DA1B42}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E0CA1DCB-2956-47FB-ABC5-042C93DA1B42}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E0CA1DCB-2956-47FB-ABC5-042C93DA1B42}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B14CAEA5-0A10-4B2B-8BD1-E2CD2A2C98C8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B14CAEA5-0A10-4B2B-8BD1-E2CD2A2C98C8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B14CAEA5-0A10-4B2B-8BD1-E2CD2A2C98C8}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -39,6 +37,14 @@ Global
 		{EF64EC03-57FA-418B-BA8B-DCFD75A144F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EF64EC03-57FA-418B-BA8B-DCFD75A144F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EF64EC03-57FA-418B-BA8B-DCFD75A144F6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6558FE39-1889-4D16-BBC6-0CA634965231}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6558FE39-1889-4D16-BBC6-0CA634965231}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6558FE39-1889-4D16-BBC6-0CA634965231}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6558FE39-1889-4D16-BBC6-0CA634965231}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

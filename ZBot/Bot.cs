@@ -1,113 +1,84 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json.Serialization;
-using System.Threading;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
+using DSharpPlus.EventArgs;
+using DSharpPlus.Interactivity;
 using Newtonsoft.Json;
-namespace ZBot {
+using ZBot;
+
+namespace DateBotBase {
 	public class Bot {
-		private CancellationTokenSource _cts { get; set; }
-		public DiscordClient Client { get; private set; }
-		public CommandsNextExtension Commands { get; private set; }
+		public static Bot Instance { get; protected set; }
+		public DiscordClient Client { get; protected set; }
 
-		public List<GuildTask> GuildsConfigs { get; private set; } = new List<GuildTask>();
+		public ulong BotId { get; private set; }
+		public DiscordUser BotUser { get; private set; }
 
-		public static Bot Instance { get; private set; }
-		public ulong Id { get; internal set; }
+		public CommandsNextExtension CommandsNext { get; protected set; }
+		public InteractivityExtension InteractivityConfiguration { get; protected set; }
 
 		public Bot() {
+			if (Instance != null)
+				throw new InvalidOperationException("Instance is already running");
 			Instance = this;
+			RunAsync().ConfigureAwait(false);
 		}
-
+		/// <summary>
+		/// Initializes the bot Asynchronously
+		/// </summary>
+		/// <returns></returns>
 		public async Task RunAsync() {
+			//Read bot connection config
+			BotConfig connectionConfig = JsonConvert.DeserializeObject<BotConfig>(
+				await new StreamReader("config.json").ReadToEndAsync()
+			);
 
-			_cts = new CancellationTokenSource();
-
-			var json = string.Empty;
-			using (var fs = File.OpenRead("config.json"))
-			using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-				json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-			dynamic jsonconfig = JsonConvert.DeserializeObject<object>(json);
-			var config = new DiscordConfiguration() {
-				Token = jsonconfig.token,
+			Client = new DiscordClient(new DiscordConfiguration {
+				Token = connectionConfig.token,
 				TokenType = TokenType.Bot,
-				AutoReconnect = true,
-				LogLevel = LogLevel.Debug,
-				UseInternalLogHandler = true
-			};
-			Client = new DiscordClient(config);
+				AutoReconnect = true
+			});
 			Client.Ready += OnClientReadyAsync;
 
-			var commandsConfig = new CommandsNextConfiguration() {
-				StringPrefixes = new string[] { jsonconfig.prefix },
-				EnableMentionPrefix = true,
-				EnableDms = true
-			};
+			CommandsNext = Client.UseCommandsNext(
+				new CommandsNextConfiguration {
+					StringPrefixes = new string[] { connectionConfig.prefix },
+					EnableMentionPrefix = true,
+					EnableDms = true
+				});
 
-			Commands = Client.UseCommandsNext(commandsConfig);
-			Commands.RegisterCommands<SomeCommands>();
+			InteractivityConfiguration = Client.UseInteractivity(
+				new InteractivityConfiguration {
+					Timeout = TimeSpan.FromSeconds(30)
+				});
 
-			Client.DebugLogger.LogMessageReceived += LogMessageAction;
+			RegisterCommands();
 
 			await Client.ConnectAsync();
-
-			//await Task.Delay(-1);//cheap fix to not quit
 		}
 
-		public System.EventHandler<DSharpPlus.EventArgs.DebugLogMessageEventArgs> LogMessageAction { get; set; }
+		public virtual void RegisterCommands() {}
 
+		/// <summary>
+		/// When Bot is up, set up event handlers for guilds and voice channel updates.
+		/// </summary>
+		/// <param name="e"></param>
+		/// <returns></returns>
 		private async Task OnClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
 
-			Id = Client.CurrentUser.Id;
-			foreach (var g in e.Client.Guilds) {
-				//is guild available?
-				if (g.Value.Name == null)
-					e.Client.GuildAvailable += async (z) => await InitGuildAsync(z.Guild).ConfigureAwait(false);
-				else
-					await InitGuildAsync(g.Value).ConfigureAwait(false);
-			}
+			BotId = Client.CurrentUser.Id;
+			BotUser = Client.CurrentUser;
+
+			await ClientReadyAsync(e);
 		}
 
-		private async Task InitGuildAsync( DiscordGuild g) {
-			var gc = new GuildTask(_cts);
-			gc.Guild = g;
-
-			gc.DateRootCategory = g.Channels.FirstOrDefault(c => c.Value.Type == ChannelType.Category && c.Value.Name.ToLower().Contains("dating")).Value;
-
-			gc.DateLobby = gc.DateRootCategory.Children.FirstOrDefault(c => c.Type == ChannelType.Text &&
-				!c.Name.ToLower().Contains("secret") &&
-				c.Name.ToLower().Contains("lobby"));
-
-			gc.VoiceLobbies.AddRange(gc.DateRootCategory.Children.Where(c => c.Type == ChannelType.Voice &&
-				!c.Name.ToLower().Contains("secret") &&
-				c.Name.ToLower().Contains("lobby")));
-
-			if (gc.VoiceLobbies.Count == 0) {
-				gc.LobbyCounter = 0;
-				await AddVoiceLobbyAsync(gc);
-			} else gc.UpdateLobbyCounter();
-
-			gc.RefreshLobbyMembers();
-
-			GuildsConfigs.Add(gc);
-
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-			gc.RunTask().ConfigureAwait(false);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-		}
-
-		public async Task AddVoiceLobbyAsync(GuildTask gc) {
-			var l = await gc.Guild.CreateVoiceChannelAsync("Date Voice Lobby " + ++gc.LobbyCounter, gc.DateRootCategory);
-			//await l.ModifyPositionAsync(gc.DateLobby.Position + 1);
-			gc.VoiceLobbies.Add(l);
-		}
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+		public virtual async Task ClientReadyAsync(ReadyEventArgs e) {}
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 	}
 }

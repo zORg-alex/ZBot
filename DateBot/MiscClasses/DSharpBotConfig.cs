@@ -2,7 +2,7 @@
 using DSharpPlus;
 using Newtonsoft.Json;
 
-namespace DateBot {
+namespace DateBot.Base {
 	public class DSharpBotConfig {
 		[JsonProperty("token")]
 		public string Token { get; set; }
