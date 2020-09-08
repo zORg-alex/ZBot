@@ -13,11 +13,12 @@ using zLib;
 
 namespace DateBot.Base {
 	[DataContract]
-	public class GuildTask : GuildConfig {
+	public partial class GuildTask : GuildConfig {
 
 		//Users, Lobbies
 		public DiscordChannel DateLobby { get; internal set; }
 		public List<DiscordChannel> DateVoiceLobbies { get; } = new List<DiscordChannel>();
+		private List<DiscordChannel> PrivateRooms { get; } = new List<DiscordChannel>();
 		public List<DiscordUser> UsersInLobbies { get; set; } = new List<DiscordUser>();
 		public DiscordChannel LogChannel { get; set; }
 		public DiscordMessage LogMessage { get; set; }
@@ -60,11 +61,9 @@ namespace DateBot.Base {
 			}
 			DateRootCategory = cat;
 
-			DateVoiceLobbies.AddRange(DateRootCategory.Children.Where(c => c.Type == ChannelType.Voice &&
-				!c.Name.ToLower().Contains("secret") &&
-				c.Name.ToLower().Contains("lobby")));
-			if (DateVoiceLobbies.Count == 0)
-				await AddLastEmptyVoicceLobby();
+			DateVoiceLobbies.AddRange(DateRootCategory.Children.Where(c => c.Type == ChannelType.Voice && c.Name.ToLower().Contains("lobby")));
+			PrivateRooms.AddRange(DateRootCategory.Children.Where(c=>c.Type == ChannelType.Voice && c.Name.ToLower().Contains("secret")));
+			await CleanupLobbies().ConfigureAwait(false);
 
 			MaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, MaleEmojiId);
 			FemaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, FemaleEmojiId);
@@ -89,15 +88,20 @@ namespace DateBot.Base {
 				await WelcomeMessage.CreateReactionAsync(FemaleEmoji).ConfigureAwait(false);
 				await WelcomeMessage.PinAsync().ConfigureAwait(false);
 			} else {
-				foreach (var r in WelcomeMessage.Reactions) {
-					if (r.Emoji == MaleEmoji || r.Emoji == FemaleEmoji) {
-						var users = await WelcomeMessage.GetReactionsAsync(r.Emoji);
-						foreach (var u in users) {
-							ApplyGenderReactions(u, r.Emoji);
-						}
-					} else
-						await WelcomeMessage.DeleteReactionsEmojiAsync(r.Emoji).ConfigureAwait(false);
+				foreach (var r in WelcomeMessage.GetReactionsAsync(MaleEmoji).Result) {
+					ApplyGenderReactions(r, MaleEmoji);
+					await WelcomeMessage.DeleteReactionsEmojiAsync(MaleEmoji).ConfigureAwait(false);
 				}
+				foreach (var r in WelcomeMessage.GetReactionsAsync(FemaleEmoji).Result) {
+					ApplyGenderReactions(r, FemaleEmoji);
+					await WelcomeMessage.DeleteReactionsEmojiAsync(FemaleEmoji).ConfigureAwait(false);
+				}
+				//Cleanup reactions
+				WelcomeMessage.DeleteAllReactionsAsync().Wait();
+				await WelcomeMessage.CreateReactionAsync(MaleEmoji).ConfigureAwait(false);
+				await WelcomeMessage.CreateReactionAsync(FemaleEmoji).ConfigureAwait(false);
+				//Cleanup rooms
+				await CleanupLobbies();
 			}
 		}
 
@@ -124,28 +128,36 @@ namespace DateBot.Base {
 					await TryMatch().ConfigureAwait(false);
 
 				} else if (contBeforeChannel && !contAfterChannel) {
-					//User left lobbies TODO check if not in private room
+					//User left lobbies
 					AllUserStates.TryGetValue(e.User.Id, out var uState);
 					uState.LastEnteredLobbyTime = default;
 					if (UsersInLobbies.Contains(e.User))
 						UsersInLobbies.Remove(e.User);
 				}
 				if(contBeforeChannel || contAfterChannel) {
-					//Comb lobbies
-					DateVoiceLobbies.Where(l => l.Id != DateVoiceLobbies.Last().Id && l.Users.Count() == 0)
-						.ToList()
-						.ForEach(async l => {
-							DateVoiceLobbies.Remove(l);
-							await l.DeleteAsync();
-						});
-					int i = 0;
-					DateVoiceLobbies.ForEach(l => l.ModifyAsync(c=>c.Name = $"Date Voice Lobby {i++}"));
-					if (DateVoiceLobbies.Last().Users.Count() > 0) {
-						//Add empty at the end
-						await AddLastEmptyVoicceLobby();
-					}
+					await CleanupLobbies();
 				}
 			}
+		}
+
+		private async Task CleanupLobbies() {
+			//Comb lobbies
+			DateVoiceLobbies.Where(l => l.Id != DateVoiceLobbies.Last().Id && l.Users.Count() == 0)
+				.ToList()
+				.ForEach(async l => {
+					DateVoiceLobbies.Remove(l);
+					await l.DeleteAsync();
+				});
+			int i = 0;
+			DateVoiceLobbies.ForEach(l => l.ModifyAsync(c => c.Name = $"Date Voice Lobby {i++}"));
+			if (DateVoiceLobbies.Last().Users.Count() > 0) {
+				//Add empty at the end
+				await AddLastEmptyVoicceLobby();
+			}
+			foreach( var c in PrivateRooms.Where(c => c.Users.Count() == 0)) {
+				await c.DeleteAsync().ConfigureAwait(false);
+			}
+			PrivateRooms.RemoveAll(c => c.Users.Count() == 0);
 		}
 
 		private async Task AddLastEmptyVoicceLobby() {
@@ -162,47 +174,33 @@ namespace DateBot.Base {
 		/// <returns></returns>
 		public async Task TryMatch() {
 			//Choose matching direction
-			var allUserStatePairs = UsersInLobbies.Join(AllUserStates, u => u.Id, s => s.Key, (u, s) => new UserStatePair { User = u, State = s.Value }).ToArray();
+			var allUserStatePairs = UsersInLobbies.Join(AllUserStates, u => u.Id, s => s.Key, (u, s) => new UserStateDiscordUserPair { User = u, State = s.Value }).ToArray();
 			var boys = allUserStatePairs.Where(p => p.State.Gender == GenderEnum.Male).ToArray();
 			var girls = allUserStatePairs.Where(p => p.State.Gender == GenderEnum.Female).ToArray();
-			SortedList<float, UserStatePair[]> matchedList;
-			if (boys.Length < girls.Length) {
-				//Match boys => girls
-				matchedList = MatchUnidirectionally(boys, girls);
-			} else {
-				//Match girls => boys
-				matchedList = MatchUnidirectionally(girls, boys);
-			}
-			while (matchedList.Count > 0) {
-				var match = matchedList.Values[0];
-				await MoveToPrivateLobbyAsync(match);
-				var rem = matchedList.Values.Where(m => m[1].State.UserId == match[1].State.UserId);
-				foreach (var r in rem) {
-					matchedList.RemoveAt(matchedList.IndexOfValue(r));
-				}
+			if (boys.Length == 0 || girls.Length == 0) return;
+
+			//Match all boys => all girls
+			var matchesList = boys.Join(girls, a => true, b => true, (a, b) => new UsersPairMatch() { A = a, B = b, Match = MatchWeight(a, b) })
+				.OrderBy(m => m.Match).ToList();
+
+			while(matchesList.Count > 0) {
+				var match = matchesList.First();
+				matchesList.RemoveAll(m=>m.A.User.Id == match.A.User.Id || m.B.User.Id == match.B.User.Id);
+				await MoveToPrivateLobbyAsync(match).ConfigureAwait(false);
 			}
 		}
 
-		private async Task MoveToPrivateLobbyAsync(UserStatePair[] userStatePairs) {
+		private async Task MoveToPrivateLobbyAsync(UsersPairMatch pair) {
+			UsersInLobbies.Remove(pair.A.User);
+			UsersInLobbies.Remove(pair.B.User);
+
 			var privateRoom = await Guild.CreateChannelAsync("Secret Room", ChannelType.Voice, DateRootCategory);
-			await privateRoom.PlaceMemberAsync(userStatePairs[0].User as DiscordMember).ConfigureAwait(false);
-			await privateRoom.PlaceMemberAsync(userStatePairs[1].User as DiscordMember).ConfigureAwait(false);
-		}
+			await privateRoom.AddOverwriteAsync(Guild.EveryoneRole, deny: Permissions.AccessChannels & Permissions.CreateInstantInvite);
 
-		public class UserStatePair {
-			public DiscordUser User { get; set; }
-			public UserState State { get; set; }
-		}
+			pair.A.State.EnteredPrivateRoomTime = pair.B.State.EnteredPrivateRoomTime = DateTime.Now;
 
-		public SortedList<float, UserStatePair[]> MatchUnidirectionally( UserStatePair[] smallSet, UserStatePair[] biggerSet) {
-			SortedList<float, UserStatePair[]> result = new SortedList<float, UserStatePair[]>();
-
-			foreach (var u in smallSet)
-				foreach (var m in biggerSet.Select(bu => new { eval = MatchWeight(u, bu), match = bu }))
-					result.Add(m.eval, new UserStatePair[2] {u, m.match});
-			
-
-			return result;
+			await privateRoom.PlaceMemberAsync(pair.A.User as DiscordMember).ConfigureAwait(false);
+			await privateRoom.PlaceMemberAsync(pair.B.User as DiscordMember).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -211,28 +209,31 @@ namespace DateBot.Base {
 		/// <param name="a"></param>
 		/// <param name="b"></param>
 		/// <returns></returns>
-		private float MatchWeight(UserStatePair a, UserStatePair b) {
+		private float MatchWeight(UserStateDiscordUserPair a, UserStateDiscordUserPair b) {
 			return a.State.LikedUserIds.Contains(b.State.UserId)?.5f:0f + (b.State.LikedUserIds.Contains(a.State.UserId)?.5f:0f);
 		}
 
 		internal async Task MessageReactionAdded(MessageReactionAddEventArgs e) {
 			if (e.Message.Id == WelcomeMessage.Id && (e.Emoji.Id == MaleEmoji.Id || e.Emoji.Id == FemaleEmoji.Id)) {
-				if (e.User.Id != DateBot.Instance.BotId)
-					ApplyGenderReactions(e.User, e.Emoji);
+				ApplyGenderReactions(e.User, e.Emoji);
 			} else
 				await e.Message.DeleteReactionsEmojiAsync(e.Emoji).ConfigureAwait(false);
 		}
 
 		public void ApplyGenderReactions(DiscordUser user, DiscordEmoji emoji) {
+			if (user.Id == DateBot.Instance.BotId) return;
 			AllUserStates.TryGetValue(user.Id, out var uState);
-			if (uState != null)
-				if (emoji == MaleEmoji) {
-					uState.Gender = GenderEnum.Male;
-					WelcomeMessage.DeleteReactionAsync(MaleEmoji, user);
-				} else if (emoji == FemaleEmoji) {
-					uState.Gender = GenderEnum.Female;
-					WelcomeMessage.DeleteReactionAsync(FemaleEmoji, user);
-				}
+			if (uState == null) {
+				uState = new UserState() { UserId = user.Id };
+				AllUserStates.Add(user.Id, uState);
+			}
+			if (emoji == MaleEmoji) {
+				uState.Gender = GenderEnum.Male;
+				WelcomeMessage.DeleteReactionAsync(MaleEmoji, user);
+			} else if (emoji == FemaleEmoji) {
+				uState.Gender = GenderEnum.Female;
+				WelcomeMessage.DeleteReactionAsync(FemaleEmoji, user);
+			}
 		}
 	}
 

@@ -11,4 +11,8 @@
     <PackageReference Include="DSharpPlus.Interactivity" Version="4.0.0-nightly-00721" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ZBot\ZBot.csproj" />
+  </ItemGroup>
+
 </Project>

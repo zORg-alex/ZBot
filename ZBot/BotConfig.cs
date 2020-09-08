@@ -1,6 +1,10 @@
-﻿namespace DateBotBase {
-	internal class BotConfig {
-		internal string token { get; set; }
-		internal string prefix { get; set; }
+﻿using Newtonsoft.Json;
+
+namespace ZBot {
+	public class BotConfig {
+		[JsonProperty("token")]
+		internal string Token { get; set; }
+		[JsonProperty("prefix")]
+		internal string Prefix { get; set; }
 	}
 }

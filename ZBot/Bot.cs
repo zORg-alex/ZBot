@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -8,10 +9,11 @@ using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Interactivity;
+using DSharpPlus.VoiceNext;
 using Newtonsoft.Json;
 using ZBot;
 
-namespace DateBotBase {
+namespace ZBot {
 	public class Bot {
 		public static Bot Instance { get; protected set; }
 		public DiscordClient Client { get; protected set; }
@@ -21,33 +23,42 @@ namespace DateBotBase {
 
 		public CommandsNextExtension CommandsNext { get; protected set; }
 		public InteractivityExtension InteractivityConfiguration { get; protected set; }
+		public Voice​Next​Extension Voice​Next​Configuration { get; protected set; }
 
-		public Bot() {
+		public Bot(Dictionary<string, string> args) {
 			if (Instance != null)
 				throw new InvalidOperationException("Instance is already running");
 			Instance = this;
-			RunAsync().ConfigureAwait(false);
+
+			BotConfig conf = null;
+			try {
+				if (args.Count > 0)
+					conf = new BotConfig() { Token = args["token"], Prefix = args["prefix"] };
+			} catch { throw new ArgumentException("Couldn't find token and prefix arguements"); }
+
+			ConfigBotAsync(conf).ConfigureAwait(false);
 		}
 		/// <summary>
 		/// Initializes the bot Asynchronously
 		/// </summary>
 		/// <returns></returns>
-		public async Task RunAsync() {
+		public async Task ConfigBotAsync(BotConfig connectionConfig = null) {
 			//Read bot connection config
-			BotConfig connectionConfig = JsonConvert.DeserializeObject<BotConfig>(
+			if (connectionConfig == null) connectionConfig = JsonConvert.DeserializeObject<BotConfig>(
 				await new StreamReader("config.json").ReadToEndAsync()
 			);
 
 			Client = new DiscordClient(new DiscordConfiguration {
-				Token = connectionConfig.token,
+				Token = connectionConfig.Token,
 				TokenType = TokenType.Bot,
-				AutoReconnect = true
+				AutoReconnect = true,
+				MinimumLogLevel = Microsoft.Extensions.Logging.LogLevel.Debug
 			});
 			Client.Ready += OnClientReadyAsync;
 
 			CommandsNext = Client.UseCommandsNext(
 				new CommandsNextConfiguration {
-					StringPrefixes = new string[] { connectionConfig.prefix },
+					StringPrefixes = new string[] { connectionConfig.Prefix },
 					EnableMentionPrefix = true,
 					EnableDms = true
 				});
@@ -56,6 +67,8 @@ namespace DateBotBase {
 				new InteractivityConfiguration {
 					Timeout = TimeSpan.FromSeconds(30)
 				});
+
+			Voice​Next​Configuration = Client.UseVoiceNext();
 
 			RegisterCommands();
 

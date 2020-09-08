@@ -11,7 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zLib", "zLib\zLib.csproj", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zLib.WPF", "zLib.WPF\zLib.WPF.csproj", "{EF64EC03-57FA-418B-BA8B-DCFD75A144F6}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bot.Console", "Bot.Console\Bot.Console.csproj", "{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_DateBot.Console", "Bot.Console\_DateBot.Console.csproj", "{A7065C43-5ECB-423A-8ABC-AE4B2013ED46}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DummyBot.ConsoleApp", "DummyBot.ConsoleApp\DummyBot.ConsoleApp.csproj", "{6558FE39-1889-4D16-BBC6-0CA634965231}"
 EndProject

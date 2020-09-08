@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DummyBot.ConsoleApp": {
+      "commandName": "Project",
+      "commandLineArgs": "/token:NzUyNDgwMDY4MDQzMDE0MjE2.X1YPrA.nnZjO8Ck_0fopkEUZW9_VgtVgog /prefix:?"
+    }
+  }
+}

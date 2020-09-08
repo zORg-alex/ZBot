@@ -1,36 +1,24 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using DSharpPlus;
-using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
-using DSharpPlus.Interactivity;
 using Newtonsoft.Json;
 using ZBot;
 
 namespace DateBot.Base {
-	public class DateBot {
-		public static DateBot Instance { get; protected set; }
-		public DiscordClient Client { get; protected set; }
-
-		public ulong BotId { get; private set; }
-		public DiscordUser BotUser { get; private set; }
-
-		public CommandsNextExtension CommandsNext { get; protected set; }
-		public InteractivityExtension InteractivityConfiguration { get; protected set; }
+	public class DateBot: ZBot.Bot {
+		public new static DateBot Instance { get; protected set; }
 		/// <summary>
 		/// Serializable Bot State
 		/// </summary>
 		public BotStateConfig State { get; private set; }
 
-		public DateBot() {
-			if (Instance != null)
-				throw new InvalidOperationException("Instance is already running");
+		public DateBot(Dictionary<string, string> args) :base(args) {
 			Instance = this;
-			RunAsync().ConfigureAwait(false);
 		}
 		/// <summary>
 		/// Returns true if guild is in State
@@ -46,47 +34,9 @@ namespace DateBot.Base {
 
 		internal GuildTask GetGuild(ulong guildId) => State.Guilds.FirstOrDefault(g => g.GuildId == guildId);
 
-		/// <summary>
-		/// Initializes the bot Asynchronously
-		/// </summary>
-		/// <returns></returns>
-		public async Task RunAsync() {
-			//Read bot connection config
-			DSharpBotConfig connectionConfig = JsonConvert.DeserializeObject<DSharpBotConfig>(
-				await new StreamReader("config.json").ReadToEndAsync()
-			);
-
-			//Deserealize bot last state
-			using (var sr = new StreamReader("botState.json")) {
-				State = JsonConvert.DeserializeObject<BotStateConfig>(
-					await sr.ReadToEndAsync()
-				);
-				if (State == null) State = new BotStateConfig();
-			}
-
-			Client = new DiscordClient(new DiscordConfiguration {
-				Token = connectionConfig.Token,
-				TokenType = TokenType.Bot,
-				AutoReconnect = true
-			});
-			Client.Ready += OnClientReadyAsync;
-
-			CommandsNext = Client.UseCommandsNext(
-				new CommandsNextConfiguration {
-					StringPrefixes = new string[] { connectionConfig.Prefix },
-					EnableMentionPrefix = true,
-					EnableDms = true
-				});
-
-			InteractivityConfiguration = Client.UseInteractivity(
-				new InteractivityConfiguration {
-					Timeout = TimeSpan.FromSeconds(30)
-				});
-
+		public override void RegisterCommands() {
 			CommandsNext.RegisterCommands<DateBotCommands>();
 			CommandsNext.RegisterCommands<SomeCommands>();
-
-			await Client.ConnectAsync();
 		}
 
 		/// <summary>
@@ -104,10 +54,16 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <param name="e"></param>
 		/// <returns></returns>
-		private async Task OnClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
+		override public async Task ClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
 
-			BotId = Client.CurrentUser.Id;
-			BotUser = Client.CurrentUser;
+			//Deserealize bot last state
+			using (var sr = new StreamReader("botState.json")) {
+				State = JsonConvert.DeserializeObject<BotStateConfig>(
+					await sr.ReadToEndAsync()
+				);
+				if (State == null) State = new BotStateConfig();
+			}
+
 			foreach (var g in e.Client.Guilds) {
 				if (g.Value.Name == null)
 					e.Client.GuildAvailable += async (z) => await InitGuildAsync(z.Guild).ConfigureAwait(false);

@@ -1,8 +1,6 @@
 ﻿using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
-using DSharpPlus.Entities;
-using MongoDB.Driver;
 using Newtonsoft.Json;
 
 namespace DateBot.Base {
