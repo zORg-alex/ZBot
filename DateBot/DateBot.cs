@@ -44,9 +44,11 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <returns></returns>
 		public async Task SaveStates() {
-			using (var sr = new StreamWriter("botState.json")) {
-				await sr.WriteAsync( JsonConvert.SerializeObject(State));
-			}
+			try {
+				using (var sr = new StreamWriter("botState.json")) {
+					await sr.WriteAsync(JsonConvert.SerializeObject(State));
+				}
+			} catch (Exception e) { Console.WriteLine(e); }
 		}
 
 		/// <summary>

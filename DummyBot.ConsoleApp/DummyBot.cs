@@ -46,9 +46,11 @@ namespace DummyBot.ConsoleApp {
 		/// </summary>
 		/// <returns></returns>
 		public async Task SaveStates() {
-			using (var sr = new StreamWriter("botState.json")) {
-				await sr.WriteAsync(JsonConvert.SerializeObject(State));
-			}
+			try {
+				using (var sr = new StreamWriter("botState.json")) {
+					await sr.WriteAsync(JsonConvert.SerializeObject(State));
+				}
+			} catch (Exception e) { Console.WriteLine(e); }
 		}
 
 		/// <summary>
@@ -93,7 +95,7 @@ namespace DummyBot.ConsoleApp {
 		public List<GuildTask> Guilds { get; private set; } = new List<GuildTask>();
 	}
 
-	public class DummyCommands: BaseCommandModule {
+	public class DummyCommands : BaseCommandModule {
 
 		[Command("dummy-bot-config")]
 		public async Task ReadConfig(CommandContext ctx, string json) {

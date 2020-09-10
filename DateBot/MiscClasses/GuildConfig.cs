@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 
 namespace DateBot.Base {
@@ -11,6 +12,8 @@ namespace DateBot.Base {
 		[DataMember]
 		public ulong DateLobbyId { get; set; }
 		[DataMember]
+		public ulong WelcomeMessageId { get; set; }
+		[DataMember]
 		public ulong LogChannelId { get; set; }
 		[DataMember]
 		public string MaleEmojiId { get; set; }
@@ -20,6 +23,8 @@ namespace DateBot.Base {
 		public string WelcomeMessageBody { get; set; }
 		[DataMember]
 		public string PrivateMessageBody { get; set; }
+		[DataMember]
+		public int SecretRoomTime { get; set; } = TimeSpan.FromMinutes(1).Milliseconds;
 		/// <summary>
 		/// Serializable user states
 		/// </summary>

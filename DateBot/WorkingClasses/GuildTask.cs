@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -17,8 +18,8 @@ namespace DateBot.Base {
 
 		//Users, Lobbies
 		public DiscordChannel DateLobby { get; internal set; }
-		public List<DiscordChannel> DateVoiceLobbies { get; } = new List<DiscordChannel>();
-		private List<DiscordChannel> PrivateRooms { get; } = new List<DiscordChannel>();
+		public List<DiscordChannel> DateVoiceLobbies { get; set; } = new List<DiscordChannel>();
+		private List<DiscordChannel> PrivateRooms { get; set; } = new List<DiscordChannel>();
 		public List<DiscordUser> UsersInLobbies { get; set; } = new List<DiscordUser>();
 		public DiscordChannel LogChannel { get; set; }
 		public DiscordMessage LogMessage { get; set; }
@@ -61,9 +62,9 @@ namespace DateBot.Base {
 			}
 			DateRootCategory = cat;
 
-			DateVoiceLobbies.AddRange(DateRootCategory.Children.Where(c => c.Type == ChannelType.Voice && c.Name.ToLower().Contains("lobby")));
-			PrivateRooms.AddRange(DateRootCategory.Children.Where(c=>c.Type == ChannelType.Voice && c.Name.ToLower().Contains("secret")));
-			await CleanupLobbies().ConfigureAwait(false);
+			DateVoiceLobbies.AddRange(GetVoiceLobbies());
+			PrivateRooms.AddRange(GetPrivateRooms());
+			await CleanupLobbies();
 
 			MaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, MaleEmojiId);
 			FemaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, FemaleEmojiId);
@@ -79,8 +80,7 @@ namespace DateBot.Base {
 
 			//Check for welcome message
 			DateLobby = DateRootCategory.Children.FirstOrDefault(c => c.Id == DateLobbyId);
-			var pinned = await DateLobby.GetPinnedMessagesAsync();
-			WelcomeMessage = pinned.FirstOrDefault(m => m.Author.Id == DateBot.Instance.BotId);
+			WelcomeMessage = await DateLobby.GetMessageAsync(WelcomeMessageId);
 			if (WelcomeMessage == null) {
 				//Add welcome message
 				WelcomeMessage = await DateLobby.SendMessageAsync(WelcomeMessageBody);
@@ -105,6 +105,14 @@ namespace DateBot.Base {
 			}
 		}
 
+		private IEnumerable<DiscordChannel> GetVoiceLobbies() {
+			return DateRootCategory.Children.Where(c => c.Type == ChannelType.Voice && c.Name.ToLower().Contains("lobby"));
+		}
+
+		private IEnumerable<DiscordChannel> GetPrivateRooms() {
+			return DateRootCategory.Children.Where(c => c.Type == ChannelType.Voice && c.Name.ToLower().Contains("secret"));
+		}
+
 		/// <summary>
 		/// User changed state in voice lobbies (joined/left)
 		/// </summary>
@@ -125,7 +133,7 @@ namespace DateBot.Base {
 					uState.LastEnteredLobbyTime = DateTime.Now;
 
 					//Try Match
-					await TryMatch().ConfigureAwait(false);
+					await TryMatch();
 
 				} else if (contBeforeChannel && !contAfterChannel) {
 					//User left lobbies
@@ -150,14 +158,17 @@ namespace DateBot.Base {
 				});
 			int i = 0;
 			DateVoiceLobbies.ForEach(l => l.ModifyAsync(c => c.Name = $"Date Voice Lobby {i++}"));
-			if (DateVoiceLobbies.Last().Users.Count() > 0) {
+			if (DateVoiceLobbies.Count == 0 || DateVoiceLobbies.Last().Users.Count() > 0) {
 				//Add empty at the end
 				await AddLastEmptyVoicceLobby();
 			}
-			foreach( var c in PrivateRooms.Where(c => c.Users.Count() == 0)) {
-				await c.DeleteAsync().ConfigureAwait(false);
-			}
-			PrivateRooms.RemoveAll(c => c.Users.Count() == 0);
+
+			try {
+				foreach (var c in PrivateRooms.Where(c => (c.Users.Count() == 0 && (c.CreationTimestamp - DateTime.Now).TotalSeconds > 15))) {
+					await c.DeleteAsync().ConfigureAwait(false);
+				}
+				PrivateRooms.RemoveAll(c => c.Users.Count() == 0);
+			} catch (Exception) { }
 		}
 
 		private async Task AddLastEmptyVoicceLobby() {
@@ -196,11 +207,50 @@ namespace DateBot.Base {
 
 			var privateRoom = await Guild.CreateChannelAsync("Secret Room", ChannelType.Voice, DateRootCategory);
 			await privateRoom.AddOverwriteAsync(Guild.EveryoneRole, deny: Permissions.AccessChannels & Permissions.CreateInstantInvite);
+			PrivateRooms.Add(privateRoom);
 
 			pair.A.State.EnteredPrivateRoomTime = pair.B.State.EnteredPrivateRoomTime = DateTime.Now;
 
 			await privateRoom.PlaceMemberAsync(pair.A.User as DiscordMember).ConfigureAwait(false);
 			await privateRoom.PlaceMemberAsync(pair.B.User as DiscordMember).ConfigureAwait(false);
+
+			//Launch timer
+			if (PrivateRoomUpdater == null) { 
+				PrivateRoomUpdater = new Timer(async s => await UpdatePrivateRooms(), null, 0, TimeSpan.FromSeconds(31).Milliseconds);
+				PrivateRoomTimerRunning = true;
+			} else if (!PrivateRoomTimerRunning) {
+				PrivateRoomUpdater.Change(TimeSpan.FromSeconds(31).Milliseconds, TimeSpan.FromSeconds(31).Milliseconds);
+				PrivateRoomTimerRunning = true;
+			}
+		}
+
+		private Timer PrivateRoomUpdater { get; set; }
+		private bool PrivateRoomTimerRunning { get; set; }
+
+		private async Task UpdatePrivateRooms() {
+			PrivateRooms.Where(r => r.Users.Count() == 0).ToList().ForEach(async r => await r.DeleteAsync().ConfigureAwait(false));
+			PrivateRooms.RemoveAll(r => r.Users.Count() == 0);
+			foreach (var r in PrivateRooms) {
+				var user = r.Users.FirstOrDefault();
+				if (user != null) {
+					AllUserStates.TryGetValue(user.Id, out var uState);
+					if (uState != null && uState.EnteredPrivateRoomTime.HasValue) {
+						var time = (uState.EnteredPrivateRoomTime.Value - DateTime.Now).Milliseconds;
+						if (time > SecretRoomTime) {
+							//Break room, return pair into lobby
+							var lobby0 = DateVoiceLobbies[0];
+							foreach (var u in r.Users) {
+								await lobby0.PlaceMemberAsync(u).ConfigureAwait(false);
+							}
+						}
+					}
+				}
+			}
+			if (PrivateRooms.Count == 0) {
+				//Pause timer
+				PrivateRoomUpdater.Change(Timeout.Infinite, Timeout.Infinite);
+				PrivateRoomTimerRunning = false;
+			}
 		}
 
 		/// <summary>
