@@ -12,5 +12,6 @@ namespace DateBot.Base {
 		public GenderEnum Gender { get; set; }
 		public DateTime? LastEnteredLobbyTime { get; internal set; }
 		public DateTime? EnteredPrivateRoomTime { get; internal set; }
+		public List<int> AgeOptions { get; set; } = new List<int>();
 	}
 }

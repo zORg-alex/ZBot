@@ -47,9 +47,10 @@ namespace DummyBot.ConsoleApp {
 		/// <returns></returns>
 		public async Task SaveStates() {
 			try {
-				using (var sr = new StreamWriter("botState.json")) {
-					await sr.WriteAsync(JsonConvert.SerializeObject(State));
-				}
+				if (State != null && State.Guilds.Count > 0)
+					using (var sr = new StreamWriter("botState.json")) {
+						await sr.WriteAsync(JsonConvert.SerializeObject(State));
+					}
 			} catch (Exception e) { Console.WriteLine(e); }
 		}
 

@@ -45,9 +45,10 @@ namespace DateBot.Base {
 		/// <returns></returns>
 		public async Task SaveStates() {
 			try {
-				using (var sr = new StreamWriter("botState.json")) {
-					await sr.WriteAsync(JsonConvert.SerializeObject(State));
-				}
+				if (State != null && State.Guilds.Count > 0)
+					using (var sr = new StreamWriter("botState.json")) {
+						await sr.WriteAsync(JsonConvert.SerializeObject(State));
+					}
 			} catch (Exception e) { Console.WriteLine(e); }
 		}
 
@@ -91,7 +92,7 @@ namespace DateBot.Base {
 		/// <returns></returns>
 		private async Task InitGuildAsync(DiscordGuild guild) {
 			var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == guild.Id);
-			if (g != null) await g.Initialize(guild).ConfigureAwait(false);
+			if (g != null) await (g.InitTask = g.Initialize(guild));
 		}
 
 		/// <summary>
