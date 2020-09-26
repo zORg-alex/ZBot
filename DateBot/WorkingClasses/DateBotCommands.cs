@@ -25,17 +25,25 @@ namespace DateBot.Base {
 				config_.Initialize(ctx.Guild).Wait();
 				await DateBot.Instance.SaveStates().ConfigureAwait(false);
 			} else {
-				var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+				var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
+				
+				//TODO decide what level of initializatino is necessary
+				if(config_.DateLobbyId != default) config.DateLobbyId = config_.DateLobbyId;
+				if (config_.DateCategoryId != default) config.DateCategoryId = config_.DateCategoryId;
+				if (config_.DateSecretCategoryId != default) config.DateSecretCategoryId = config_.DateSecretCategoryId;
+				if (config_.MaleEmojiId != default) config.MaleEmojiId = config_.MaleEmojiId;
+				if (config_.FemaleEmojiId != default) config.FemaleEmojiId = config_.FemaleEmojiId;
+				if (config_.OptionEmojiIds.Count != default) config.OptionEmojiIds = config_.OptionEmojiIds;
+				if (config_.LikeEmojiId != default) config.LikeEmojiId = config_.LikeEmojiId;
+				if (config_.DisLikeEmojiId != default) config.DisLikeEmojiId = config_.DisLikeEmojiId;
+				if (config_.TimeEmojiId != default) config.TimeEmojiId = config_.TimeEmojiId;
+				if (config_.SecretRoomTime != default) config.SecretRoomTime = config_.SecretRoomTime;
+				if (config_.WelcomeMessageBody != default) config.WelcomeMessageBody = config_.WelcomeMessageBody;
+				if (config_.WelcomeMessageId != default) config.WelcomeMessageId = config_.WelcomeMessageId;
+				if (config_.PrivateMessageBody != default) config.PrivateMessageBody = config_.PrivateMessageBody;
+				if (config_.LogChannelId != default) config.LogChannelId = config_.LogChannelId;
 
-				config.DateLobbyId = config_.DateLobbyId;
-				config.DateCategoryId = config_.DateCategoryId;
-				config.MaleEmojiId = config_.MaleEmojiId;
-				config.FemaleEmojiId = config_.FemaleEmojiId;
-				config.WelcomeMessageBody = config_.WelcomeMessageBody;
-				config.PrivateMessageBody = config_.PrivateMessageBody;
-				config.LogChannelId = config_.LogChannelId;
-
-				await config.Initialize(ctx.Guild).ConfigureAwait(false);
+				await ((GuildTask)config).Initialize(ctx.Guild).ConfigureAwait(false);
 			}
 		}
 	}

@@ -137,7 +137,7 @@ namespace DummyBot.ConsoleApp {
 			if (guild != null) Guild = guild;
 			//GuildId = guild.Id;
 
-			ConnectToVoice = Guild.GetChannel(ConnectToVoiceId);
+			ConnectToVoice = Guild.Channels.FirstOrDefault(c=>c.Value.Name == ConnectToVoiceName).Value;
 			SetRandomReactionOnChannel = Guild.GetChannel(SetRandomReactionOnChannelId);
 			SetRandomReactionOnMessage = await SetRandomReactionOnChannel.GetMessageAsync(SetRandomReactionOnMessageId);
 
@@ -157,7 +157,7 @@ namespace DummyBot.ConsoleApp {
 		[DataMember]
 		public ulong GuildId { get; internal set; }
 		[DataMember]
-		public ulong ConnectToVoiceId { get; internal set; }
+		public String ConnectToVoiceName { get; internal set; }
 		[DataMember]
 		public ulong SetRandomReactionOnMessageId { get; internal set; }
 		[DataMember]

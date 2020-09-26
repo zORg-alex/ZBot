@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using DiscordRPC;
+using DiscordRPC.Logging;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
@@ -18,8 +20,10 @@ namespace DateBot.Base {
 		public BotStateConfig State { get; private set; }
 
 		public DateBot(Dictionary<string, string> args) :base(args) {
+			if (Instance != null) throw new Exception("One DateBot already existing!");
 			Instance = this;
 		}
+
 		/// <summary>
 		/// Returns true if guild is in State
 		/// </summary>
@@ -47,7 +51,7 @@ namespace DateBot.Base {
 			try {
 				if (State != null && State.Guilds.Count > 0)
 					using (var sr = new StreamWriter("botState.json")) {
-						await sr.WriteAsync(JsonConvert.SerializeObject(State));
+						await sr.WriteAsync(JsonConvert.SerializeObject(State, Formatting.Indented));
 					}
 			} catch (Exception e) { Console.WriteLine(e); }
 		}
@@ -69,20 +73,21 @@ namespace DateBot.Base {
 
 			foreach (var g in e.Client.Guilds) {
 				if (g.Value.Name == null)
-					e.Client.GuildAvailable += async (z) => await InitGuildAsync(z.Guild).ConfigureAwait(false);
+					e.Client.GuildAvailable += (z) => InitGuildAsync(z.Guild);
 				else
-					await InitGuildAsync(g.Value).ConfigureAwait(false);
+					_ = InitGuildAsync(g.Value);
 			}
 
 			Client.VoiceStateUpdated += Client_VoiceStateUpdated;
 			Client.MessageReactionAdded += Client_MessageReactionAdded;
+			//Client.MessageReactionRemoved += Client_MessageReactionRemoved; ;
 
 			//????
-			State.Guilds.ForEach(g => {
-				DiscordGuild guild;
-				Client.Guilds.TryGetValue(g.GuildId, out guild);
-				g.Guild = guild;
-			});
+			//State.Guilds.ForEach(g => {
+			//	DiscordGuild guild;
+			//	Client.Guilds.TryGetValue(g.GuildId, out guild);
+			//	g.Guild = guild;
+			//});
 		}
 
 		/// <summary>
@@ -91,8 +96,11 @@ namespace DateBot.Base {
 		/// <param name="guild"></param>
 		/// <returns></returns>
 		private async Task InitGuildAsync(DiscordGuild guild) {
-			var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == guild.Id);
-			if (g != null) await (g.InitTask = g.Initialize(guild));
+			var gt = State.Guilds.FirstOrDefault(g => g.GuildId == guild.Id);
+			if (gt != null && !gt.Initialized && gt.InitTask == null) {
+				gt.InitTask = gt.Initialize(guild);
+				await gt.InitTask.ConfigureAwait(false);
+			}
 		}
 
 		/// <summary>
@@ -100,12 +108,21 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <param name="e"></param>
 		/// <returns></returns>
-		private async Task Client_MessageReactionAdded(MessageReactionAddEventArgs e) {
+		private Task Client_MessageReactionAdded(MessageReactionAddEventArgs e) {
 			var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == e.Guild.Id);
 			if (g != null) {
-				await g.MessageReactionAdded(e).ConfigureAwait(false);
+				g.MessageReactionAdded(e);
 			}
+			return null;
 		}
+		//private Task Client_MessageReactionRemoved(MessageReactionRemoveEventArgs e) {
+		//	var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == e.Guild.Id);
+		//	if (g != null) {
+		//		g.MessageReactionRemoved(e);
+		//	}
+		//	return null;
+		//}
+
 
 		/// <summary>
 		/// VoiceChannel update redirects to a registered guild

@@ -3,8 +3,8 @@
 namespace ZBot {
 	public class BotConfig {
 		[JsonProperty("token")]
-		internal string Token { get; set; }
+		public string Token { get; set; }
 		[JsonProperty("prefix")]
-		internal string Prefix { get; set; }
+		public string Prefix { get; set; }
 	}
 }

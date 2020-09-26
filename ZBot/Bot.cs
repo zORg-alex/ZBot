@@ -52,7 +52,7 @@ namespace ZBot {
 				Token = connectionConfig.Token,
 				TokenType = TokenType.Bot,
 				AutoReconnect = true,
-				MinimumLogLevel = Microsoft.Extensions.Logging.LogLevel.Debug
+				MinimumLogLevel = Microsoft.Extensions.Logging.LogLevel.Error
 			});
 			Client.Ready += OnClientReadyAsync;
 
