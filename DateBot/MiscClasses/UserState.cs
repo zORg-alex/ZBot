@@ -22,6 +22,8 @@ namespace DateBot.Base {
 		}
 
 		internal void AddMatch(ulong id, int max = 5) {
+			if (LastMatches.Contains(id))
+				LastMatches.Remove(id);
 			LastMatches.Add(id);
 			if (LastMatches.Count > max) {
 				LastMatches.RemoveAt(0);

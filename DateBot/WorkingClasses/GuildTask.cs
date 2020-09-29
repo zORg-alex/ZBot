@@ -183,7 +183,8 @@ namespace DateBot.Base {
 				if (mate != null) {
 					AllUserStates.TryGetValue(mate.Id, out var mateState);
 					if (emoji == LikeEmoji) {
-						uState.LikedUserIds.Add(mate.Id);
+						if (!uState.LikedUserIds.Contains(mate.Id))
+							uState.LikedUserIds.Add(mate.Id);
 						uState.DislikedUserIds.Remove(mate.Id);
 						if (mateState.LikedUserIds.Contains(u.Id)) {
 							//Mutual like
@@ -209,7 +210,8 @@ namespace DateBot.Base {
 						uState.LikedUserIds.Remove(mate.Id);
 						uState.DislikedUserIds.Remove(mate.Id);
 					} else if (emoji == DisLikeEmoji) {
-						uState.DislikedUserIds.Add(mate.Id);
+						if (!uState.DislikedUserIds.Contains(mate.Id))
+							uState.DislikedUserIds.Add(mate.Id);
 						uState.LikedUserIds.Remove(mate.Id);
 					}
 				}
@@ -276,14 +278,15 @@ namespace DateBot.Base {
 			//check secret rooms
 			PairsInSecretRooms.Clear();
 			foreach (var r in SecretRooms.ToArray()) {
-				if (r.Users.Count() > 0) {
+				if (r.Users.Count() > 1) {
 					AllUserStates.TryGetValue(r.Users.First().Id, out var uState);
 					var pair = new PairInSecretRoom() { SecretRoom = r, Users = r.Users.ToList() };
 					//Try get timeout
 					if (uState != null && uState.EnteredPrivateRoomTime.HasValue) pair.Timeout = uState.EnteredPrivateRoomTime.Value.AddMilliseconds(SecretRoomTime);
 					else pair.Timeout = DateTime.Now;
 					PairsInSecretRooms.Add(pair);
-					_ = TimeoutDisband(pair.Users.Select(u=>new UserStateDiscordUserPair() { User = u, State = AllUserStates.FirstOrDefault(s=>s.Key == u.Id).Value }).ToArray()).ConfigureAwait(false);
+					_ = TimeoutDisband(pair)
+						.ConfigureAwait(false);
 				} else {
 					SecretRooms.Remove(r);
 					try {
@@ -354,7 +357,7 @@ namespace DateBot.Base {
 
 				if (!beforeInLobbies && !beforeInSecretRooms && afterInLobbies) {
 					//User connected to lobbies
-					//DebugLogWrite($"User {e.User} connected to {e.Channel} ");
+					DebugLogWriteLine($"User {e.User} connected to {e.Channel} ");
 					if (!UsersInLobbies.Contains(e.User)) UsersInLobbies.Add(e.User);
 					if (!AllUserStates.ContainsKey(e.User.Id))
 						AllUserStates.Add(e.User.Id, new UserState() { UserId = e.User.Id, LastEnteredLobbyTime = DateTime.Now });
@@ -363,7 +366,7 @@ namespace DateBot.Base {
 
 				} else if ((beforeInLobbies || beforeInSecretRooms) && !afterInLobbies && !afterInSecretRooms) {
 					//User left activity
-					//DebugLogWrite($"User {e.User} left activity ");
+					DebugLogWriteLine($"User {e.User} left activity ");
 					if (beforeInLobbies) {
 						UsersInLobbies.Remove(e.User);
 						RemoveStateFor(e.User);
@@ -378,12 +381,12 @@ namespace DateBot.Base {
 					}
 
 				} else if (beforeInLobbies && afterInLobbies) {
-					//DebugLogWrite($"User {e.User} switched lobbies ");
+					DebugLogWriteLine($"User {e.User} switched lobbies ");
 					//User switched Lobbies
 					TryCombLobbies();
 
 				} else if (beforeInLobbies && afterInSecretRooms) {
-					//DebugLogWrite($"User {e.User} moved to {e.After.Channel} ");
+					DebugLogWriteLine($"User {e.User} moved to {e.After.Channel} ");
 					//Moved to secret room
 					UsersInLobbies.Remove(e.User);
 					TryCombLobbies();
@@ -391,7 +394,7 @@ namespace DateBot.Base {
 				} else if (beforeInSecretRooms && afterInLobbies) {
 					//Returned from secret room
 					RemoveStateFor(e.User);
-					//DebugLogWrite($"User {e.User} returned to lobby, trying to disbnad {e.Before.Channel}... ");
+					DebugLogWriteLine($"User {e.User} returned to lobby, trying to disbnad {e.Before.Channel}... ");
 					if (!UsersInLobbies.Contains(e.User)) UsersInLobbies.Add(e.User);
 					await disbandRemoveSecretRoom(e.Before.Channel).ConfigureAwait(false);
 					//DebugLogWrite($"{e.Before.Channel} removed/disbanded. Starting MatchingTask");
@@ -422,6 +425,8 @@ namespace DateBot.Base {
 		private void RemoveStateFor(DiscordUser User) {
 			AllUserStates.TryGetValue(User.Id, out var uState);
 			uState.EnteredPrivateRoomTime = null;
+			PairsInSecretRooms.RemoveAll(p => p.Users.Contains(User));
+
 		}
 
 		private void TryCombLobbies() {
@@ -479,7 +484,7 @@ namespace DateBot.Base {
 				var matches = (from a in userStatePairsInLobbies.OrderBy(u=>r.Next())
 							   from b in userStatePairsInLobbies
 							   select Match(a.State, b.State))
-								.Where(m => m.A.State != m.B.State && m.A.State.Gender != m.B.State.Gender)
+								.Where(m => m.A.State != m.B.State && m.A.State.Gender != m.B.State.Gender && m.A.State.Gender != GenderEnum.None && m.B.State.Gender != GenderEnum.None)
 					.OrderByDescending(m => m.Match)
 					.ToList();
 
@@ -494,7 +499,7 @@ namespace DateBot.Base {
 					|| m.B.State == pair.B.State
 					);
 					MoveToPrivateLobbyAsync(pair)
-						.ContinueWith(t=>TimeoutDisband(new UserStateDiscordUserPair[] { pair.A, pair.B}))
+						.ContinueWith(t=>TimeoutDisband(t.Result))
 						.ConfigureAwait(false);
 
 					exit = exitConditions(matches);
@@ -522,7 +527,7 @@ namespace DateBot.Base {
 			};
 		}
 
-		private async Task MoveToPrivateLobbyAsync(UsersPairMatch pair) {
+		private async Task<PairInSecretRoom> MoveToPrivateLobbyAsync(UsersPairMatch pair) {
 			//DebugLogWriteLine($"Moving {pair.A} and {pair.B} to room... ");
 			UsersInLobbies.Remove(pair.A.User);
 			UsersInLobbies.Remove(pair.B.User);
@@ -538,11 +543,12 @@ namespace DateBot.Base {
 			_ = privateRoom.PlaceMemberAsync(pair.A.User).ConfigureAwait(false);
 			_ = privateRoom.PlaceMemberAsync(pair.B.User).ConfigureAwait(false);
 
-			PairsInSecretRooms.Add(new PairInSecretRoom() {
+			var p = new PairInSecretRoom() {
 				Users = new List<DiscordMember>() { pair.A.User, pair.B.User },
 				SecretRoom = privateRoom,
 				Timeout = DateTime.Now.AddMilliseconds(SecretRoomTime)
-			});
+			};
+			PairsInSecretRooms.Add(p);
 
 			pair.A.State.AddMatch(pair.B.User.Id);
 			pair.B.State.AddMatch(pair.A.User.Id);
@@ -551,6 +557,7 @@ namespace DateBot.Base {
 			//_ = CreatePersonalTextChannelAsync(pair.B).ConfigureAwait(false);
 
 			DebugLogWrite("finished");
+			return p;
 		}
 		//private async Task CreatePersonalTextChannelAsync(UserStateDiscordUserPair uDisState) {
 		//	DiscordChannel channel = GetSecretChannelFor(uDisState.User.Id);
@@ -594,36 +601,46 @@ namespace DateBot.Base {
 		//		}
 		//	}
 		//}
+		[System.Diagnostics.DebuggerNonUserCode]
+		private DateTime UpdateTimeout(List<DiscordMember> Users) {
+			try {
+				AllUserStates.TryGetValue(Users[0].Id, out var uStateA);
+				AllUserStates.TryGetValue(Users[1].Id, out var uStateB);
 
-		private async Task TimeoutDisband(UserStateDiscordUserPair[] pairs) {
-			DateTime? timeout = null;
-			if (pairs.Length == 2) {
-				var a = pairs[0].State.EnteredPrivateRoomTime;
-				var b = pairs[1].State.EnteredPrivateRoomTime;
-				timeout = a == b ? a : DateTime.Now;
-				timeout = timeout + TimeSpan.FromMilliseconds(SecretRoomTime);
+				return (uStateA.EnteredPrivateRoomTime < uStateB.EnteredPrivateRoomTime ? uStateA.EnteredPrivateRoomTime : uStateB.EnteredPrivateRoomTime).Value.AddMilliseconds(SecretRoomTime);
+			} catch (Exception) { }
+			return DateTime.Now;
+		}
+
+		private async Task TimeoutDisband(PairInSecretRoom pair) {
+			DateTime? timeout = UpdateTimeout(pair.Users);
+			if (pair.Users.Count == 2) {
+				do {
+					DebugLogWrite($" Now: {DateTime.Now} Timeout: {timeout} secrettime: {TimeSpan.FromMilliseconds(SecretRoomTime)}");
+
+					await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds - 61000, 0));
+					if (!PairsInSecretRooms.Contains(pair)) return; //quit if disbanded outside
+
+					foreach (var p in pair.Users) {
+						await p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}").ConfigureAwait(false);
+					}
+
+					await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds + 100, 0));
+
+					if (!PairsInSecretRooms.Contains(pair)) return; //quit if disbanded outside
+					timeout = UpdateTimeout(pair.Users);
+					if (DateTime.Now < timeout.Value)
+						foreach (var p in pair.Users) {
+							await p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}").ConfigureAwait(false);
+						}
+				} while (DateTime.Now < timeout.Value);
 			}
-			if (timeout == null)
-				timeout = DateTime.Now + TimeSpan.FromMilliseconds(SecretRoomTime);
-			do {
-				await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds - 61000, 0));
-
-				foreach (var p in pairs) {
-					await p.User.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pairs.Select(p=>p.User.DisplayName))}").ConfigureAwait(false);
-				}
-
-				await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds + 100, 0));
-			} while (DateTime.Now < timeout.Value);
 			//return if timer off
 			//else
-			foreach (var p in pairs.ToArray()) {
+			DebugLogWriteLine($"Timeout Disbanding {pair.Users[0]} and {pair.Users[1]}");
+			foreach (var p in pair.Users.ToArray()) {
 				//Return participants to lobby 0
-				_ = DateVoiceLobbies[0].PlaceMemberAsync(p.User).ConfigureAwait(false);
-				////Clear secret channel
-				//try {
-				//	var secChannel = GetSecretChannelFor(p.User.Id);
-				//	_ = secChannel.DeleteMessagesAsync(await secChannel.GetMessagesAsync());
-				//} catch (Exception) { }
+				_ = DateVoiceLobbies[0].PlaceMemberAsync(p).ConfigureAwait(false);
 			}
 		}
 
