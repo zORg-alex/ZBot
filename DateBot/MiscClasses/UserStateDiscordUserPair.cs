@@ -5,7 +5,7 @@ namespace DateBot.Base {
 		public DiscordMember User { get; set; }
 		public UserState State { get; set; }
 		public override string ToString() {
-			return $"UserDiscordMemberPair ({User} : {State})";
+			return $"UserDiscordMemberPair ({User.DisplayName} : {State})";
 		}
 	}
 }

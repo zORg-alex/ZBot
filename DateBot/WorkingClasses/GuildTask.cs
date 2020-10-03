@@ -170,6 +170,7 @@ namespace DateBot.Base {
 			async Task applyDefaultReactions() {
 				await PrivateControlsMessage.CreateReactionAsync(LikeEmoji).ConfigureAwait(false);
 				await PrivateControlsMessage.CreateReactionAsync(CancelLikeEmoji).ConfigureAwait(false);
+				await PrivateControlsMessage.CreateReactionAsync(DisLikeEmoji).ConfigureAwait(false);
 				await PrivateControlsMessage.CreateReactionAsync(TimeEmoji).ConfigureAwait(false);
 			}
 		}
@@ -179,6 +180,7 @@ namespace DateBot.Base {
 			var pair = PairsInSecretRooms.FirstOrDefault(p => p.Users.Contains(u));
 			if (pair != null) {
 				var users = pair.Users;
+				var user = users.FirstOrDefault(x => x.Id == u.Id);
 				var mate = users.FirstOrDefault(x => x.Id != u.Id);
 				if (mate != null) {
 					AllUserStates.TryGetValue(mate.Id, out var mateState);
@@ -189,20 +191,25 @@ namespace DateBot.Base {
 						if (mateState.LikedUserIds.Contains(u.Id)) {
 							//Mutual like
 							//TODO arrange a couple a private channel
-							var mem = await Guild.GetMemberAsync(u.Id);
-							var dmc = await mem.CreateDmChannelAsync();
+							var userDmc = await user.CreateDmChannelAsync();
+							var mateDmc = await mate.CreateDmChannelAsync();
 							var emb = new DiscordEmbedBuilder();
+
 							emb.WithTitle(string.Format(DMLikeMessageTitle, mate.Mention));
 							emb.WithColor(DiscordColor.Lilac);
 							emb.WithDescription(string.Format(DMLikeMessage, mate.Mention));
 							emb.WithImageUrl(mate.AvatarUrl);
-							await dmc.SendMessageAsync(embed: emb.Build());
+							await userDmc.SendMessageAsync(embed: emb.Build());
+
+							emb.WithTitle(string.Format(DMLikeMessageTitle, user.Mention));
+							emb.WithDescription(string.Format(DMLikeMessage, user.Mention));
+							emb.WithImageUrl(user.AvatarUrl);
+							await mateDmc.SendMessageAsync(embed: emb.Build());
 						}
 					} else if (emoji == TimeEmoji) {
 						uState.AddTime = true;
-						//update rich presence
 						if (mateState.AddTime) {
-							uState.EnteredPrivateRoomTime = mateState.EnteredPrivateRoomTime = uState.EnteredPrivateRoomTime.Value.AddMilliseconds(SecretRoomTime);
+							uState.EnteredPrivateRoomTime = uState.EnteredPrivateRoomTime.Value.AddMilliseconds(SecretRoomTime);
 						}
 
 					} else if (emoji == CancelLikeEmoji) {
@@ -258,10 +265,10 @@ namespace DateBot.Base {
 			}
 
 			async Task applyDefaultReactions() {
-				await WelcomeMessage.CreateReactionAsync(MaleEmoji).ConfigureAwait(false);
-				await WelcomeMessage.CreateReactionAsync(FemaleEmoji).ConfigureAwait(false);
+				await WelcomeMessage.CreateReactionAsync(MaleEmoji);
+				await WelcomeMessage.CreateReactionAsync(FemaleEmoji);
 				foreach (var optionEmoji in OptionEmojis.ToArray()) {
-					await WelcomeMessage.CreateReactionAsync(optionEmoji).ConfigureAwait(false);
+					await WelcomeMessage.CreateReactionAsync(optionEmoji);
 				}
 			}
 		}
@@ -450,7 +457,7 @@ namespace DateBot.Base {
 		private async Task MatchingTask() {
 			//Wait some time
 			DebugLogWriteLine("MatchingTask started, waiting");
-			await Task.Delay(10000);
+			await Task.Delay(30000);
 			//Get all users
 			DebugLogWriteLine("MatchingTask Matching");
 			DateVoiceLobbies.Clear();
@@ -488,7 +495,7 @@ namespace DateBot.Base {
 					.OrderByDescending(m => m.Match)
 					.ToList();
 
-				DebugLogWriteLine($"Match {string.Join(", ",userStatePairsInLobbies.Select(p=>p.User.Username))} users, {matches.Select(m=>m.A.User.DisplayName + ":" + m.B.User.DisplayName + " " + m.Match)} matches");
+				DebugLogWriteLine($"Match {string.Join(", ",userStatePairsInLobbies.Select(p=>p.User.Username))} users,\n {string.Join(", ", matches.Select(m=>m.A.User.DisplayName + ":" + m.B.User.DisplayName + " " + m.Match))} matches");
 				//Move to private rooms
 				bool exit = exitConditions(matches);
 				while (matches.Count() > 0 && !exit) {
@@ -537,77 +544,36 @@ namespace DateBot.Base {
 			SecretRooms.Add(privateRoom);
 			DebugLogWrite("room created... ");
 
-			pair.A.State.EnteredPrivateRoomTime = pair.B.State.EnteredPrivateRoomTime = DateTime.Now;
+
+			var timeout = DateTime.Now.AddMilliseconds(SecretRoomTime);
+			pair.A.State.EnteredPrivateRoomTime = pair.B.State.EnteredPrivateRoomTime = timeout;
+
+			var p = new PairInSecretRoom() {
+				Users = new List<DiscordMember>() { pair.A.User, pair.B.User },
+				SecretRoom = privateRoom,
+				Timeout = timeout
+			};
+			PairsInSecretRooms.Add(p);
 
 			DebugLogWrite("moving... ");
 			_ = privateRoom.PlaceMemberAsync(pair.A.User).ConfigureAwait(false);
 			_ = privateRoom.PlaceMemberAsync(pair.B.User).ConfigureAwait(false);
 
-			var p = new PairInSecretRoom() {
-				Users = new List<DiscordMember>() { pair.A.User, pair.B.User },
-				SecretRoom = privateRoom,
-				Timeout = DateTime.Now.AddMilliseconds(SecretRoomTime)
-			};
-			PairsInSecretRooms.Add(p);
 
 			pair.A.State.AddMatch(pair.B.User.Id);
 			pair.B.State.AddMatch(pair.A.User.Id);
 
-			//_ = CreatePersonalTextChannelAsync(pair.A).ConfigureAwait(false);
-			//_ = CreatePersonalTextChannelAsync(pair.B).ConfigureAwait(false);
-
 			DebugLogWrite("finished");
 			return p;
 		}
-		//private async Task CreatePersonalTextChannelAsync(UserStateDiscordUserPair uDisState) {
-		//	DiscordChannel channel = GetSecretChannelFor(uDisState.User.Id);
-		//	if (channel == null) {
-		//		channel = await Guild.CreateChannelAsync($"Personal Channel {uDisState.User.Id}", ChannelType.Text, DateSecretCategory, topic: "This is you personal channel for communication with bot");
-		//		_ = channel.AddOverwriteAsync(uDisState.User, allow: Permissions.AccessChannels).ConfigureAwait(false);
-		//	}
-		//	var message = await channel.SendMessageAsync(PrivateMessageBody);
-		//	await message.CreateReactionAsync(LikeEmoji).ConfigureAwait(false);
-		//	await message.CreateReactionAsync(TimeEmoji).ConfigureAwait(false);
-		//	await message.CreateReactionAsync(DisLikeEmoji).ConfigureAwait(false);
 
-		//}
-
-		//private DiscordChannel GetSecretChannelFor(ulong Id) {
-		//	return DateSecretCategory.Children.FirstOrDefault(c => c.Name.Contains(Id.ToString()));
-		//}
-
-		//private void SecretChannelReaction(DiscordEmoji emoji, DiscordUser user, DiscordMessage message, bool added) {
-		//	//Get uState, is he in secret room
-		//	AllUserStates.TryGetValue(user.Id, out var uState);
-		//	var pair = PairsInSecretRooms.FirstOrDefault(p => p.Users.Contains(user));
-		//	if (pair != null) {
-		//		var pairId = pair.Users.FirstOrDefault(u => u.Id != uState.UserId).Id;
-		//		if (emoji.Id == TimeEmoji.Id) {
-		//			uState.EnteredPrivateRoomTime = uState.EnteredPrivateRoomTime.Value.AddMilliseconds(SecretRoomTime * (added ? 1 : -1));
-		//		} else if (emoji.Id == LikeEmoji.Id) {
-		//			if (added) {
-		//				uState.LikedUserIds.Add(pairId);
-		//				uState.DislikedUserIds.Remove(pairId);
-		//				_ = message.DeleteReactionAsync(DisLikeEmoji, user).ConfigureAwait(false);
-		//			} else
-		//				uState.LikedUserIds.Remove(pairId);
-		//		} else if (emoji.Id == DisLikeEmoji.Id) {
-		//			if (added) {
-		//				uState.DislikedUserIds.Add(pairId);
-		//				uState.LikedUserIds.Remove(pairId);
-		//				_ = message.DeleteReactionAsync(LikeEmoji, user).ConfigureAwait(false);
-		//			} else
-		//				uState.DislikedUserIds.Remove(pairId);
-		//		}
-		//	}
-		//}
 		[System.Diagnostics.DebuggerNonUserCode]
 		private DateTime UpdateTimeout(List<DiscordMember> Users) {
 			try {
 				AllUserStates.TryGetValue(Users[0].Id, out var uStateA);
 				AllUserStates.TryGetValue(Users[1].Id, out var uStateB);
 
-				return (uStateA.EnteredPrivateRoomTime < uStateB.EnteredPrivateRoomTime ? uStateA.EnteredPrivateRoomTime : uStateB.EnteredPrivateRoomTime).Value.AddMilliseconds(SecretRoomTime);
+				return (uStateA.EnteredPrivateRoomTime < uStateB.EnteredPrivateRoomTime ? uStateA.EnteredPrivateRoomTime : uStateB.EnteredPrivateRoomTime).Value;
 			} catch (Exception) { }
 			return DateTime.Now;
 		}
@@ -621,6 +587,7 @@ namespace DateBot.Base {
 					await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds - 61000, 0));
 					if (!PairsInSecretRooms.Contains(pair)) return; //quit if disbanded outside
 
+					timeout = UpdateTimeout(pair.Users);
 					foreach (var p in pair.Users) {
 						await p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}").ConfigureAwait(false);
 					}
@@ -631,7 +598,7 @@ namespace DateBot.Base {
 					timeout = UpdateTimeout(pair.Users);
 					if (DateTime.Now < timeout.Value)
 						foreach (var p in pair.Users) {
-							await p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}").ConfigureAwait(false);
+							_ = p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}").ConfigureAwait(false);
 						}
 				} while (DateTime.Now < timeout.Value);
 			}
@@ -672,15 +639,15 @@ namespace DateBot.Base {
 			if (e.User.Id == DateBot.Instance.BotId) return;
 			try {
 				if (e.Message.Id == WelcomeMessage.Id) {
-					_ = e.Message.DeleteReactionAsync(e.Emoji, e.User).ConfigureAwait(false);
 					if (e.Emoji.Id == MaleEmoji.Id || e.Emoji.Id == FemaleEmoji.Id || OptionEmojis.Contains(e.Emoji)) {
 						ApplyGenderAndOptionReactions(e.User, e.Emoji);
 					}
-				} else if (e.Message.Id == PrivateControlsMessageId) {
 					_ = e.Message.DeleteReactionAsync(e.Emoji, e.User).ConfigureAwait(false);
+				} else if (e.Message.Id == PrivateControlsMessageId) {
 					if (e.Emoji.Id == LikeEmoji.Id || e.Emoji.Id == DisLikeEmoji.Id || e.Emoji.Id == TimeEmoji.Id) {
 						_ = ApplyPrivateReactionsAsync(e.User, e.Emoji).ConfigureAwait(false);
 					}
+					_ = e.Message.DeleteReactionAsync(e.Emoji, e.User).ConfigureAwait(false);
 				}
 			} catch (Exception) { }
 		}
