@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System.Linq;
+using System.Security.Policy;
+using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using Newtonsoft.Json;
@@ -9,6 +11,7 @@ namespace DateBot.Base {
 	/// </summary>
 	public class DateBotCommands : BaseCommandModule {
 		[Command("date-bot-config")]
+		[Aliases("config")]
 		public async Task ReadConfig(CommandContext ctx, string json) {
 			json = json.Replace("```", string.Empty);
 			var isNew = !DateBot.Instance.GuildRegistered(ctx.Guild.Id);
@@ -44,6 +47,20 @@ namespace DateBot.Base {
 				if (config_.LogChannelId != default) config.LogChannelId = config_.LogChannelId;
 
 				await ((GuildTask)config).Initialize(ctx.Guild).ConfigureAwait(false);
+			}
+		}
+		[Command("date-bot-adduser")]
+		[Aliases("adduser")]
+		public async Task AddUser(CommandContext ctx, ulong id, int gender, int age, params ulong[] likedIds) {
+			var gt = DateBot.Instance.State.Guilds.FirstOrDefault(g => g.GuildId == ctx.Guild.Id);
+			gt.AllUserStates.TryGetValue(id, out var uState);
+			if (uState == null) {
+				uState = new UserState() { UserId = id, Gender = (GenderEnum)gender, AgeOptions = age, LikedUserIds = likedIds.ToList() };
+				gt.AllUserStates.Add(id, uState);
+			} else {
+				uState.Gender = (GenderEnum)gender;
+				uState.AgeOptions = age;
+				uState.AddLike(likedIds);
 			}
 		}
 	}

@@ -29,5 +29,26 @@ namespace DateBot.Base {
 				LastMatches.RemoveAt(0);
 			}
 		}
+
+		internal void AddLike(ulong[] likedIds) {
+			foreach (var id in likedIds) {
+				AddLike(id);
+			}
+		}
+		internal void AddLike(ulong likedId) {
+			LikedUserIds.Remove(likedId);
+			DislikedUserIds.Remove(likedId);
+			LikedUserIds.Add(likedId);
+		}
+		internal void AddDislike(ulong likedId) {
+			LikedUserIds.Remove(likedId);
+			DislikedUserIds.Remove(likedId);
+			DislikedUserIds.Add(likedId);
+		}
+		internal void RemoveAffinity(ulong likedId) {
+			LikedUserIds.Remove(likedId);
+			DislikedUserIds.Remove(likedId);
+			DislikedUserIds.Add(likedId);
+		}
 	}
 }
