@@ -143,7 +143,7 @@ namespace DateBot.Base {
 			if (UsersInLobbies.Count > 0) TryStartMatchingTask();
 		}
 
-		async Task PrivateControlsMessageInit() {
+		public async Task PrivateControlsMessageInit() {
 			try {
 				PrivateControlsMessage = await DateLobby.GetMessageAsync(PrivateControlsMessageId);
 			} catch (Exception) { }
@@ -190,7 +190,6 @@ namespace DateBot.Base {
 						uState.DislikedUserIds.Remove(mate.Id);
 						if (mateState.LikedUserIds.Contains(u.Id)) {
 							//Mutual like
-							//TODO arrange a couple a private channel
 							var userDmc = await user.CreateDmChannelAsync();
 							var mateDmc = await mate.CreateDmChannelAsync();
 							var emb = new DiscordEmbedBuilder();
@@ -225,21 +224,11 @@ namespace DateBot.Base {
 			}
 		}
 
-		//private void UpdateTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e) {
-
-		//	//Return from lobbies that timed out
-		//	foreach (var p in PairsInSecretRooms.Where(pp => pp.Timeout > DateTime.Now)) {
-		//		Task.WaitAll(p.Users.Select(async u => await DateVoiceLobbies[0].PlaceMemberAsync(u).ConfigureAwait(false)).ToArray());
-		//	}
-		//	//Try match
-		//	TryMatchUsers();
-		//}
-
 		/// <summary>
 		/// Gets or creates welcome message and refreshes reaction emojis
 		/// </summary>
 		/// <returns></returns>
-		async Task WelcomeMessageInit() {
+		public async Task WelcomeMessageInit() {
 
 			try {
 				WelcomeMessage = await DateLobby.GetMessageAsync(WelcomeMessageId);
@@ -576,6 +565,14 @@ namespace DateBot.Base {
 				return (uStateA.EnteredPrivateRoomTime < uStateB.EnteredPrivateRoomTime ? uStateA.EnteredPrivateRoomTime : uStateB.EnteredPrivateRoomTime).Value;
 			} catch (Exception) { }
 			return DateTime.Now;
+		}
+
+		public void ChangeTimeout(int newTimeout) {
+			var diff = newTimeout - SecretRoomTime;
+			SecretRoomTime = newTimeout;
+			foreach (var uState in AllUserStates) {
+				uState.Value.EnteredPrivateRoomTime = uState.Value.EnteredPrivateRoomTime?.AddMilliseconds(diff);
+			}
 		}
 
 		private async Task TimeoutDisband(PairInSecretRoom pair) {

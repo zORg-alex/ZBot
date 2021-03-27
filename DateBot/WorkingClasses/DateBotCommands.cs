@@ -29,24 +29,66 @@ namespace DateBot.Base {
 				await DateBot.Instance.SaveStates().ConfigureAwait(false);
 			} else {
 				var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
-				
-				//TODO decide what level of initializatino is necessary
-				if(config_.DateLobbyId != default) config.DateLobbyId = config_.DateLobbyId;
-				if (config_.DateCategoryId != default) config.DateCategoryId = config_.DateCategoryId;
-				if (config_.DateSecretCategoryId != default) config.DateSecretCategoryId = config_.DateSecretCategoryId;
-				if (config_.MaleEmojiId != default) config.MaleEmojiId = config_.MaleEmojiId;
-				if (config_.FemaleEmojiId != default) config.FemaleEmojiId = config_.FemaleEmojiId;
-				if (config_.OptionEmojiIds.Count != default) config.OptionEmojiIds = config_.OptionEmojiIds;
-				if (config_.LikeEmojiId != default) config.LikeEmojiId = config_.LikeEmojiId;
-				if (config_.DisLikeEmojiId != default) config.DisLikeEmojiId = config_.DisLikeEmojiId;
-				if (config_.TimeEmojiId != default) config.TimeEmojiId = config_.TimeEmojiId;
-				if (config_.SecretRoomTime != default) config.SecretRoomTime = config_.SecretRoomTime;
-				if (config_.WelcomeMessageBody != default) config.WelcomeMessageBody = config_.WelcomeMessageBody;
+
+				bool regenerateWelcomeMessage = false;
+				bool reinit = false;
+				var gt = ((GuildTask)config);
+				//TODO decide what level of initialization is necessary
+				if (config_.DateLobbyId != default) {
+					reinit = config.DateLobbyId != config_.DateLobbyId;
+					config.DateLobbyId = config_.DateLobbyId;
+				}
+				if (config_.DateCategoryId != default) {
+					reinit = config.DateCategoryId != config_.DateCategoryId;
+					config.DateCategoryId = config_.DateCategoryId;
+				}
+				if (config_.DateSecretCategoryId != default) {
+					reinit = config.DateSecretCategoryId != config_.DateSecretCategoryId;
+					config.DateSecretCategoryId = config_.DateSecretCategoryId;
+				}
+				if (config_.MaleEmojiId != default) {
+					regenerateWelcomeMessage = config.MaleEmojiId != config_.MaleEmojiId;
+					config.MaleEmojiId = config_.MaleEmojiId;
+				}
+				if (config_.FemaleEmojiId != default) {
+					regenerateWelcomeMessage = config.FemaleEmojiId != config_.FemaleEmojiId;
+					config.FemaleEmojiId = config_.FemaleEmojiId;
+				}
+				if (config_.OptionEmojiIds.Count != default) {
+					regenerateWelcomeMessage = config.OptionEmojiIds != config_.OptionEmojiIds;
+					config.OptionEmojiIds = config_.OptionEmojiIds;
+				}
+				if (config_.LikeEmojiId != default) {
+					regenerateWelcomeMessage = config.LikeEmojiId != config_.LikeEmojiId;
+					config.LikeEmojiId = config_.LikeEmojiId;
+				}
+				if (config_.DisLikeEmojiId != default) {
+					regenerateWelcomeMessage = config.DisLikeEmojiId != config_.DisLikeEmojiId;
+					config.DisLikeEmojiId = config_.DisLikeEmojiId;
+				}
+				if (config_.TimeEmojiId != default) {
+					regenerateWelcomeMessage = config.TimeEmojiId != config_.TimeEmojiId;
+					config.TimeEmojiId = config_.TimeEmojiId;
+				}
+				if (config_.SecretRoomTime != default) {
+					gt.ChangeTimeout(config_.SecretRoomTime);
+				}
+				if (config_.WelcomeMessageBody != default && config.WelcomeMessageBody != config_.WelcomeMessageBody) {
+					config.WelcomeMessageBody = config_.WelcomeMessageBody;
+					await gt.WelcomeMessage.ModifyAsync(config.WelcomeMessageBody);
+				}
 				if (config_.WelcomeMessageId != default) config.WelcomeMessageId = config_.WelcomeMessageId;
-				if (config_.PrivateMessageBody != default) config.PrivateMessageBody = config_.PrivateMessageBody;
+				if (config_.PrivateMessageBody != default && config.PrivateMessageBody != config_.PrivateMessageBody) {
+					config.PrivateMessageBody = config_.PrivateMessageBody;
+					await gt.PrivateControlsMessage.ModifyAsync(config.PrivateMessageBody);
+				}
 				if (config_.LogChannelId != default) config.LogChannelId = config_.LogChannelId;
 
-				await ((GuildTask)config).Initialize(ctx.Guild).ConfigureAwait(false);
+				if (reinit) await gt.Initialize(ctx.Guild).ConfigureAwait(false);
+				else if (regenerateWelcomeMessage) {
+					await gt.WelcomeMessageInit();
+					await gt.PrivateControlsMessageInit();
+				}
 			}
 		}
 		[Command("date-bot-adduser")]
