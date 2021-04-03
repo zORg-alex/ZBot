@@ -5,8 +5,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using System.Windows.Documents;
-using DSharpPlus.CommandsNext;
-using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using Newtonsoft.Json;
 using ZBot;
@@ -61,12 +59,16 @@ namespace DummyBot.ConsoleApp {
 		/// <returns></returns>
 		override public async Task ClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
 
-			//Deserealize bot last state
-			using (var sr = new StreamReader("botState.json")) {
-				State = JsonConvert.DeserializeObject<BotStateConfig>(
-					await sr.ReadToEndAsync()
-				);
-				if (State == null) State = new BotStateConfig();
+			if (!File.Exists("botState.json")) {
+				State = new BotStateConfig();
+			} else {
+				//Deserealize bot last state
+				using (var sr = new StreamReader("botState.json")) {
+					State = JsonConvert.DeserializeObject<BotStateConfig>(
+						await sr.ReadToEndAsync()
+					);
+					if (State == null) State = new BotStateConfig();
+				}
 			}
 
 			foreach (var g in e.Client.Guilds) {
@@ -96,35 +98,6 @@ namespace DummyBot.ConsoleApp {
 		public List<GuildTask> Guilds { get; private set; } = new List<GuildTask>();
 	}
 
-	public class DummyCommands : BaseCommandModule {
-
-		[Command("dummy-bot-config")]
-		public async Task ReadConfig(CommandContext ctx, string json) {
-			json = json.Replace("```", string.Empty);
-			var isNew = !DummyBot.Instance.GuildRegistered(ctx.Guild.Id);
-
-			GuildTask config_ =
-				JsonConvert.DeserializeObject<GuildTask>(json);
-
-			if (config_.LogChannelId == 0)
-				config_.LogChannelId = ctx.Channel.Id;
-
-			if (isNew) {
-				config_.GuildId = ctx.Guild.Id;
-				DummyBot.Instance.AddGuild(config_);
-
-				config_.Initialize(ctx.Guild).Wait();
-				await DummyBot.Instance.SaveStates().ConfigureAwait(false);
-			} else {
-				var config = DummyBot.Instance.GetGuild(ctx.Guild.Id);
-
-				config.LogChannelId = config_.LogChannelId;
-
-				await config.Initialize().ConfigureAwait(false);
-			}
-		}
-	}
-
 	[DataContract]
 	public class GuildTask : GuildConfig {
 		public DiscordGuild Guild { get; private set; }
@@ -139,10 +112,11 @@ namespace DummyBot.ConsoleApp {
 
 			ConnectToVoice = Guild.Channels.FirstOrDefault(c=>c.Value.Name == ConnectToVoiceName).Value;
 			SetRandomReactionOnChannel = Guild.GetChannel(SetRandomReactionOnChannelId);
-			SetRandomReactionOnMessage = await SetRandomReactionOnChannel.GetMessageAsync(SetRandomReactionOnMessageId);
+			if (SetRandomReactionOnChannel != null)
+				SetRandomReactionOnMessage = await SetRandomReactionOnChannel?.GetMessageAsync(SetRandomReactionOnMessageId);
 
 			try {
-				var r = SetRandomReactionOnMessage.Reactions[new Random().Next(0, SetRandomReactionOnMessage.Reactions.Count)];
+				var r = SetRandomReactionOnMessage.Reactions[new Random().Next(0, 2)];//Assuming Gender reactinos are always first
 				await SetRandomReactionOnMessage.CreateReactionAsync(r.Emoji);
 				DummyBot.Instance.VoiceNextConfiguration.ConnectAsync(ConnectToVoice).Wait();
 			} catch (Exception e) {

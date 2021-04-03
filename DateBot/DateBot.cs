@@ -63,12 +63,16 @@ namespace DateBot.Base {
 		/// <returns></returns>
 		override public async Task ClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
 
-			//Deserealize bot last state
-			using (var sr = new StreamReader("botState.json")) {
-				State = JsonConvert.DeserializeObject<BotStateConfig>(
-					await sr.ReadToEndAsync()
-				);
-				if (State == null) State = new BotStateConfig();
+			if (!File.Exists("botState.json")) {
+				State = new BotStateConfig();
+			} else {
+				//Deserealize bot last state
+				using (var sr = new StreamReader("botState.json")) {
+					State = JsonConvert.DeserializeObject<BotStateConfig>(
+						await sr.ReadToEndAsync()
+					);
+					if (State == null) State = new BotStateConfig();
+				}
 			}
 
 			foreach (var g in e.Client.Guilds) {

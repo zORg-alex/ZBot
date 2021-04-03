@@ -7,8 +7,8 @@ namespace ZBot.MessageFramework {
 
 		public static DiscordEmoji GetEmoji(string emoji) {
 
-			if (guildEmoji[emoji] is DiscordEmoji foundEmoji) {
-				return foundEmoji;
+			if (guildEmoji.ContainsKey(emoji)) {
+				return guildEmoji[emoji];
 			} else {
 				var newEmoji = DiscordEmoji.FromName(Bot.Instance.Client, emoji);
 				//What if not found? Return null or throw exception?
@@ -26,6 +26,15 @@ namespace ZBot.MessageFramework {
 		public static DiscordEmoji MaleSign { get { return GetEmoji(":male_sign:"); } }
 		public static DiscordEmoji WhiteHeartInRed { get { return GetEmoji(":heart_decoration:"); } }
 
-
+		public static DiscordEmoji One { get { return GetEmoji(":one:"); } }
+		public static DiscordEmoji Two { get { return GetEmoji(":two:"); } }
+		public static DiscordEmoji Three { get { return GetEmoji(":three:"); } }
+		public static DiscordEmoji Four { get { return GetEmoji(":four:"); } }
+		public static DiscordEmoji Five { get { return GetEmoji(":five:"); } }
+		public static DiscordEmoji Six { get { return GetEmoji(":six:"); } }
+		public static DiscordEmoji Seven { get { return GetEmoji(":seven:"); } }
+		public static DiscordEmoji Eight { get { return GetEmoji(":eight:"); } }
+		public static DiscordEmoji Nine { get { return GetEmoji(":nine:"); } }
+		public static DiscordEmoji Zero { get { return GetEmoji(":zero:"); } }
 	}
 }
