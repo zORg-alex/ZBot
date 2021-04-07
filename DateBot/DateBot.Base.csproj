@@ -15,7 +15,6 @@
 
   <ItemGroup>
 	  <ProjectReference Include="..\ZBot\ZBot.csproj" />
-	  <ProjectReference Include="..\zLib.WPF\zLib.WPF.csproj" />
 	  <ProjectReference Include="..\zLib\zLib.csproj" />
   </ItemGroup>
 

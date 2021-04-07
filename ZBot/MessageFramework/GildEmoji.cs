@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using DSharpPlus.Entities;
 
-namespace ZBot.MessageFramework {
+namespace ZBot.DialogFramework {
 	public static class GildEmoji {
 		private static Dictionary<string, DiscordEmoji> guildEmoji { get; } = new Dictionary<string, DiscordEmoji>();
 

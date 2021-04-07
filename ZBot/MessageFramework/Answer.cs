@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus.Entities;
 
-namespace ZBot.MessageFramework {
+namespace ZBot.DialogFramework {
 	public struct Answer {
 		/// <summary>
 		/// 

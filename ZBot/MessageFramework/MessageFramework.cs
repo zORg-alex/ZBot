@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Timers;
 using DSharpPlus.Entities;
-using OneOf;
 using zLib;
 
-namespace ZBot.MessageFramework {
+namespace ZBot.DialogFramework {
 	public static class MessageFramework {
 		public static TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(30);
 		public static TimeSpan DefaultTimeoutBeforeDelete { get; set; } = TimeSpan.FromSeconds(3);
@@ -75,6 +73,7 @@ namespace ZBot.MessageFramework {
 						}))().ConfigureAwait(false);
 
 					timeoutTimer.Pause();
+					//Do we need to check if there is another answer set already, just in case of hickup
 					answered = await answer.InvokeFromEmoji(e.User);
 					Console.WriteLine($"answered {answered}");
 
@@ -159,6 +158,9 @@ namespace ZBot.MessageFramework {
 			timeoutTimer.Start();
 
 			timeoutTimer.Elapsed += async (s, e) => {
+				//Do we need to dispose it? Or just leave it?
+				//In case of permanent behavior it will just skip and won't unsubscribe, just what we need
+				timeoutTimer.Stop();
 				Console.WriteLine($"timeout");
 				if (behaviour != MessageBehavior.Permanent && !answered) {
 					await unsubscribeAndDismiss().ConfigureAwait(false);

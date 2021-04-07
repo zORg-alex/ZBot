@@ -32,6 +32,7 @@ namespace zLib {
 		public new event ElapsedEventHandler Elapsed;
 
 		private bool wasPaused;
+		public bool IsPaused { get; private set; }
 		private DateTime startedAt;
 		private DateTime pausedAt;
 
@@ -41,12 +42,16 @@ namespace zLib {
 		}
 
 		public void Pause() {
+			if (IsPaused) return;
 			wasPaused = true;
+			IsPaused = true;
 			pausedAt = DateTime.Now;
 			base.Stop();
 		}
 
 		public void Release() {
+			if (!IsPaused) return;
+			IsPaused = false;
 			//Set temporal interval
 			base.Interval = Interval - ((pausedAt - startedAt).TotalMilliseconds % Interval);
 			base.Elapsed += PausableTimer_ElapsedAfterPause;

@@ -1,4 +1,4 @@
-﻿namespace ZBot.MessageFramework {
+﻿namespace ZBot.DialogFramework {
 	public enum MessageBehavior {
 		/// <summary>
 		/// Keep message forever

@@ -3,12 +3,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
-using ZBot.MessageFramework;
+using ZBot.DialogFramework;
 
 namespace DummyBot.ConsoleApp {
 	public class DummyCommands : BaseCommandModule {
 
 		[Command("dummy-config")]
+		[Aliases("config")]
 		public async Task ReadConfig(CommandContext ctx) {
 
 			await ctx.Message.DeleteAsync().ConfigureAwait(false);
