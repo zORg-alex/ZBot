@@ -18,7 +18,19 @@ namespace ZBot.DialogFramework {
 			if (onAnswer != default)
 				OnAnswer = onAnswer;
 			else
-				OnAnswer = e => { return null; };
+				OnAnswer = e => Task.FromResult(false);
+		}
+
+		public Answer(DiscordEmoji emoji, Func<AnswerArgs, Task> onAnswer) {
+			Emoji = emoji;
+			StringTokens = new string[0];
+			if (onAnswer != default)
+				OnAnswer = e => { 
+					_ = onAnswer(e).ConfigureAwait(false);
+					return Task.FromResult(true); 
+				};
+			else
+				OnAnswer = e => Task.FromResult(false);
 		}
 
 		public DiscordEmoji Emoji { get; }

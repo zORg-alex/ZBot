@@ -7,7 +7,7 @@ using DSharpPlus.Entities;
 using zLib;
 
 namespace ZBot.DialogFramework {
-	public static class MessageFramework {
+	public static class DialogFramework {
 		public static TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(30);
 		public static TimeSpan DefaultTimeoutBeforeDelete { get; set; } = TimeSpan.FromSeconds(3);
 		public static TimeSpan DefaultDeleteAnswerTimeout { get; set; } = TimeSpan.FromSeconds(3);
@@ -41,6 +41,8 @@ namespace ZBot.DialogFramework {
 			//Find or create a message even if missing
 			if (existingMessageId is ulong messageId) {
 				DMessage = await channel.GetMessageAsync(messageId);
+				if (DMessage.Content != messageBody)
+					_ = DMessage.ModifyAsync(messageBody);
 			} 
 			if (DMessage == null) {
 				DMessage = await channel.SendMessageAsync(messageBody);
@@ -73,7 +75,9 @@ namespace ZBot.DialogFramework {
 						}))().ConfigureAwait(false);
 
 					timeoutTimer.Pause();
+
 					//Do we need to check if there is another answer set already, just in case of hickup
+					//TODO It's a reaction answer. Shouldn't it be true by default?
 					answered = await answer.InvokeFromEmoji(e.User);
 					Console.WriteLine($"answered {answered}");
 
