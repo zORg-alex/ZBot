@@ -71,12 +71,18 @@ namespace DummyBot.ConsoleApp {
 				}
 			}
 
-			foreach (var g in e.Client.Guilds) {
-				if (g.Value.Name == null)
-					e.Client.GuildAvailable += async (z) => await InitGuildAsync(z.Guild).ConfigureAwait(false);
-				else
-					await InitGuildAsync(g.Value).ConfigureAwait(false);
-			}
+			//Should I discard instead of await this one. If it get's stuck it won't function anywhere past this method
+#pragma warning disable CS1998
+			e.Client.GuildAvailable += async (e) => _ = InitGuildAsync(e.Guild).ConfigureAwait(false);
+#pragma warning restore CS1998
+
+			//This is logically wrong. Seems I've overthought this one
+			//foreach (var g in e.Client.Guilds) {
+			//	if (g.Value.Name == null)
+			//		e.Client.GuildAvailable += async (z) => await InitGuildAsync(z.Guild).ConfigureAwait(false);
+			//	else
+			//		await InitGuildAsync(g.Value).ConfigureAwait(false);
+			//}
 		}
 
 		public override void RegisterCommands() {
@@ -118,7 +124,7 @@ namespace DummyBot.ConsoleApp {
 			try {
 				var r = SetRandomReactionOnMessage.Reactions[new Random().Next(0, 2)];//Assuming Gender reactinos are always first
 				await SetRandomReactionOnMessage.CreateReactionAsync(r.Emoji);
-				DummyBot.Instance.VoiceNextConfiguration.ConnectAsync(ConnectToVoice).Wait();
+				_ = DummyBot.Instance.VoiceNextConfiguration.ConnectAsync(ConnectToVoice).ConfigureAwait(false);
 			} catch (Exception e) {
 				Console.WriteLine(e);
 			}

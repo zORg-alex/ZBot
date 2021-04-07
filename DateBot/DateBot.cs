@@ -75,12 +75,17 @@ namespace DateBot.Base {
 				}
 			}
 
-			foreach (var g in e.Client.Guilds) {
-				if (g.Value.Name == null)
-					e.Client.GuildAvailable += (z) => InitGuildAsync(z.Guild);
-				else
-					_ = InitGuildAsync(g.Value);
-			}
+			//Should I discard instead of await this one. If it get's stuck it won't function anywhere past this method
+#pragma warning disable CS1998
+			e.Client.GuildAvailable += async (e) => _ = InitGuildAsync(e.Guild).ConfigureAwait(false);
+#pragma warning restore CS1998
+
+			//foreach (var g in e.Client.Guilds) {
+			//	if (g.Value.Name == null)
+			//		e.Client.GuildAvailable += (z) => InitGuildAsync(z.Guild);
+			//	else
+			//		_ = InitGuildAsync(g.Value);
+			//}
 
 			Client.VoiceStateUpdated += Client_VoiceStateUpdated;
 			Client.MessageReactionAdded += Client_MessageReactionAdded;
