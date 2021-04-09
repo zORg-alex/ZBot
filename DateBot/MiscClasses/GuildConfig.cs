@@ -12,7 +12,7 @@ namespace DateBot.Base {
 		[DataMember]
 		public ulong DateSecretCategoryId { get; set; }
 		[DataMember]
-		public ulong DateLobbyId { get; set; }
+		public ulong DateTextChannelId { get; set; }
 		[DataMember]
 		public ulong WelcomeMessageId { get; set; }
 		[DataMember]

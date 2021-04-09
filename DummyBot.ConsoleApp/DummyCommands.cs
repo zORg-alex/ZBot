@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
@@ -11,7 +12,7 @@ namespace DummyBot.ConsoleApp {
 
 		[Command("dummy-config")]
 		[Aliases("config")]
-		public async Task ReadConfig(CommandContext ctx) {
+		public async Task Config(CommandContext ctx) {
 
 			await ctx.Message.DeleteAsync().ConfigureAwait(false);
 
@@ -30,33 +31,30 @@ namespace DummyBot.ConsoleApp {
 			// Channel>Message id's to set random reaction
 			async Task MainMenu() {
 				//Menu message
-				await DialogFramework.CreateMessage(ctx.Channel,
+				await DialogFramework.CreateQuestion(ctx.Channel,
 					$"What we should set up?" + Environment.NewLine +
-					$"{GildEmoji.One} Voice channel to connect to " + Environment.NewLine +
-					$"{GildEmoji.Two} Message id to react to",
-					new Answer[] { 
-					new Answer(GildEmoji.One, new string[] { "one", "voice", "channel" }, async e=>{
+					$"{EmojiProvider.One} Voice channel to connect to " + Environment.NewLine +
+					$"{EmojiProvider.Two} Message id to react to", new Answer[]
+					{
+					new Answer(EmojiProvider.One, new string[] { "one", "voice", "channel" }, async e => {
 						await SetVoiceChannel().ConfigureAwait(false);
-						return true;
-					}), new Answer(GildEmoji.Two, new string[] { "two", "message", "react"}, async e=>{
+					}),
+					new Answer(EmojiProvider.Two, new string[] { "two", "message", "react" }, async e => {
 						await SetMessageChannel().ConfigureAwait(false);
-						return true;
 					})},
 					ctx.User.Id, timeoutBeforeDelete: TimeSpan.Zero, deleteAnswer: true).ConfigureAwait(false);
 			}
 			//Continue configuring or quit?
 			async Task Continue() {
 				//ask
-				await DialogFramework.CreateMessage(ctx.Channel,
+				await DialogFramework.CreateQuestion(ctx.Channel,
 					"Would you go over?",
 					new Answer[] {
-						new Answer(GildEmoji.CheckMarkOnGreen, new string[] { "yes", "sure", "go" }, async e => {
+						new Answer(EmojiProvider.CheckMarkOnGreen, new string[] { "yes", "sure", "go" }, async e => {
 							await MainMenu().ConfigureAwait(false);
-							return true;
 					}),
-						new Answer(GildEmoji.CrossOnGreen, new string[] { "no", "stop", "done" }, async e=>{
+						new Answer(EmojiProvider.CrossOnGreen, new string[] { "no", "stop", "done" }, async e=>{
 							await DialogFramework.QuickVolatileMessage(ctx.Channel, "Thank you. We are done here. Have a nice day.").ConfigureAwait(false);
-							return true;
 						})
 					},
 					ctx.User.Id, timeoutBeforeDelete: TimeSpan.Zero, deleteAnswer: true).ConfigureAwait(false);
@@ -64,72 +62,68 @@ namespace DummyBot.ConsoleApp {
 			//Setvoice channel
 			async Task SetVoiceChannel() {
 				//Message
-				await DialogFramework.CreateMessage(ctx.Channel,
+				DiscordChannel channel = null;
+				await DialogFramework.CreateQuestion(ctx.Channel,
 					$"Enter channel name, to connect to.",
+					message => {
+						channel = ctx.Guild.Channels.FirstOrDefault(c => c.Value.Name.Contains(message)).Value;
+						return channel != null;
+					},
 					async e => {
-						var channel = ctx.Guild.Channels.FirstOrDefault(c => c.Value.Name.Contains(e.Message.Content)).Value;
-						if (channel != null) {
-							//ok
-							var gt = DummyBot.Instance.GetGuild(ctx.Guild.Id);
-							gt.ConnectToVoiceName = channel.Name;
-							gt.ConnectToVoice = channel;
+						var gt = DummyBot.Instance.GetGuild(ctx.Guild.Id);
+						gt.ConnectToVoiceName = channel.Name;
+						gt.ConnectToVoice = channel;
 
-							//Apply changes in task
-							await DummyBot.Instance.GetGuild(ctx.Guild.Id).Initialize().ConfigureAwait(false);
+						//Apply changes in task
+						await DummyBot.Instance.GetGuild(ctx.Guild.Id).Initialize().ConfigureAwait(false);
 
 
-							//Continue to next step
-							await Continue().ConfigureAwait(false);
-							return true;
-						} else
-							//retry
-							return false;
+						//Continue to next step
+						await Continue().ConfigureAwait(false);
 					}, ctx.User.Id, timeoutBeforeDelete: TimeSpan.Zero, deleteAnswer: true,
 					wrongAnswer: "Couldn't find that channel. Try again.").ConfigureAwait(false);
 			}
 			//Set channel id to react on a message
 			async Task SetMessageChannel() {
-				await DialogFramework.CreateMessage(ctx.Channel,
+				DiscordChannel channel = null;
+				await DialogFramework.CreateQuestion(ctx.Channel,
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-					$"Paste Channel Id, where to set random reaction.", async e => {
+					$"Paste Channel Id, where to set random reaction.", message => {
+						if (ulong.TryParse(message, out var id))
+							channel = ctx.Guild.GetChannel(id);
+						return channel != null;
+					},
+					async e => {
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
-						ulong.TryParse(e.Message.Content, out var id);
-						var channel = ctx.Guild.GetChannel(id);
-						if (channel != null) {
-							var gt = DummyBot.Instance.GetGuild(ctx.Guild.Id);
-							gt.SetRandomReactionOnChannelId = id;
-							gt.SetRandomReactionOnChannel = channel;
+						var gt = DummyBot.Instance.GetGuild(ctx.Guild.Id);
+						gt.SetRandomReactionOnChannelId = channel.Id;
+						gt.SetRandomReactionOnChannel = channel;
 
 
-							//Continue to next step
-							await SetMessage().ConfigureAwait(false);
-							return true;
-						} else
-							return false;
+						//Continue to next step
+						await SetMessage().ConfigureAwait(false);
 					}, ctx.User.Id, timeoutBeforeDelete: TimeSpan.Zero, deleteAnswer: true,
 					wrongAnswer: "Couldn't find that channel. Try again.").ConfigureAwait(false);
 			}
 			//Set message id to react to
 			async Task SetMessage() {
-				await DialogFramework.CreateMessage(ctx.Channel,
-					$"Paste Message Id, where to set random reaction.", async e => {
-						ulong.TryParse(e.Message.Content, out var id);
-						var gt = DummyBot.Instance.GetGuild(ctx.Guild.Id);
-						var message = await gt.SetRandomReactionOnChannel.GetMessageAsync(id);
-						if (message != null) {
-							gt.SetRandomReactionOnMessageId = id;
-							gt.SetRandomReactionOnMessage = message;
+				GuildTask gt = null;
+				DiscordMessage msg = null;
+				await DialogFramework.CreateQuestion(ctx.Channel,
+					$"Paste Message Id, where to set random reaction.", message => {
+						ulong.TryParse(message, out var id);
+						gt = DummyBot.Instance.GetGuild(ctx.Guild.Id);
+						msg = gt.SetRandomReactionOnChannel.GetMessageAsync(id).Result;
+						return msg != null;
+					}, async e => {
+						gt.SetRandomReactionOnMessageId = msg.Id;
+						gt.SetRandomReactionOnMessage = msg;
 
-							//Apply changes in task
-							await DummyBot.Instance.GetGuild(ctx.Guild.Id).Initialize().ConfigureAwait(false);
+						//Apply changes in task
+						_ = DummyBot.Instance.GetGuild(ctx.Guild.Id).Initialize();
 
-
-							//Continue to next step
-							await Continue().ConfigureAwait(false);
-							return true;
-						} else {
-							return false;
-						}
+						//Continue to next step
+						await Continue().ConfigureAwait(false);
 					}, ctx.User.Id, timeoutBeforeDelete: TimeSpan.Zero, deleteAnswer: true,
 					wrongAnswer: "Couldn't find that message. Try again.").ConfigureAwait(false);
 			}
@@ -137,21 +131,31 @@ namespace DummyBot.ConsoleApp {
 
 		[Command("post-here")]
 		public async Task PostHere(CommandContext ctx, DiscordMessage message, [RemainingText] string text) {
-			await DialogFramework.CreateMessage(ctx.Channel, text, new Answer[] {
-				new Answer(GildEmoji.One, async e =>{
+			await DialogFramework.CreateQuestion(ctx.Channel, text, new Answer[] {
+				new Answer(EmojiProvider.One, async e =>{
 					await DialogFramework.QuickVolatileMessage(ctx.Channel, "thx", TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 				})
-			}, existingMessageId: message.Id,
-			behaviour: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero);
+			}, existingMessage: message,
+			behavior: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero);
 		}
 
 		[Command("post-here")]
 		public async Task PostHere(CommandContext ctx, [RemainingText] string text) {
-			await DialogFramework.CreateMessage(ctx.Channel, text, new Answer[] {
-				new Answer(GildEmoji.One, async e =>{ 
+			await DialogFramework.CreateQuestion(ctx.Channel, text, new Answer[] {
+				new Answer(EmojiProvider.One, async e =>{ 
 					await DialogFramework.QuickVolatileMessage(ctx.Channel, "thx", TimeSpan.FromSeconds(1)).ConfigureAwait(false); 
 				})
-			}, behaviour: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero);
+			}, behavior: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero);
+		}
+		[Command("question")]
+		public async Task Question(CommandContext ctx, [RemainingText] string text) {
+
+			await ctx.Message.DeleteAsync().ConfigureAwait(false);
+
+			await DialogFramework.CreateQuestion(ctx.Channel, text, result => true, async e => {
+				var q = await e.Question.Channel.GetMessageAsync(e.Question.Id);
+				await q.ModifyAsync(q.Content + Environment.NewLine + e.Message.Content).ConfigureAwait(false);
+			}, ctx.User.Id, MessageBehavior.Permanent, deleteAnswer:true, deleteAnswerTimeout:TimeSpan.Zero,waitForMultipleAnswers:true);
 		}
 	}
 }

@@ -10,6 +10,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using Newtonsoft.Json;
+using ZBot.DialogFramework;
 using zLib;
 using Timer = System.Timers.Timer;
 
@@ -22,7 +23,7 @@ namespace DateBot.Base {
 		public DiscordMessage LogMessage { get; set; }
 		public DiscordChannel DateRootCategory { get; set; }
 		public DiscordChannel DateSecretCategory { get; set; }
-		public DiscordChannel DateLobby { get; internal set; }
+		public DiscordChannel DateTextChannel { get; internal set; }
 		public DiscordMessage WelcomeMessage { get; private set; }
 		public DiscordMessage PrivateControlsMessage { get; private set; }
 		public List<DiscordChannel> DateVoiceLobbies { get; set; } = new List<DiscordChannel>();
@@ -122,7 +123,7 @@ namespace DateBot.Base {
 
 			//DebugLogWrite("Initiating Welcome message... ");
 			//Check for welcome message TODO add option emojis
-			DateLobby = DateRootCategory.Children.FirstOrDefault(c => c.Id == DateLobbyId);
+			DateTextChannel = Guild.GetChannel(DateTextChannelId);
 			await WelcomeMessageInit().ConfigureAwait(false);
 			_ = PrivateControlsMessageInit().ConfigureAwait(false);
 
@@ -138,35 +139,25 @@ namespace DateBot.Base {
 		}
 
 		public async Task PrivateControlsMessageInit() {
-			try {
-				PrivateControlsMessage = await DateLobby.GetMessageAsync(PrivateControlsMessageId);
-			} catch (Exception) { }
-			if (PrivateControlsMessage == null) {
-				//Add welcome message and default reactions
-				PrivateControlsMessage = await DateLobby.SendMessageAsync(PrivateMessageBody);
-				PrivateControlsMessageId = PrivateControlsMessage.Id;
-				_ = applyDefaultReactions().ConfigureAwait(false);
-				_ = PrivateControlsMessage.PinAsync().ConfigureAwait(false);
-			} else {
-				var pc = DateLobby.GetMessageAsync(PrivateControlsMessageId).Result;
-				foreach (var r in pc.Reactions.ToArray()) {
-					if (r.Emoji == LikeEmoji || r.Emoji == DisLikeEmoji || r.Emoji == CancelLikeEmoji) {
-						foreach (var u in pc.GetReactionsAsync(r.Emoji).Result.Where(r => r.Id != DateBot.Instance.BotId)) {
-							_ = PrivateControlsMessage.DeleteReactionAsync(r.Emoji, u).ConfigureAwait(false);
-							_ = ApplyPrivateReactionsAsync(u, r.Emoji).ConfigureAwait(false);
-						}
-					} else
-						await PrivateControlsMessage.DeleteReactionsEmojiAsync(r.Emoji).ConfigureAwait(false);
-				}
-				_ = applyDefaultReactions().ConfigureAwait(false);
-			}
+			var answers = new Answer[] {
+				new Answer(LikeEmoji, e=>{
+					_ = ApplyPrivateReactionsAsync(e.User, LikeEmoji).ConfigureAwait(false);
+				}),
+				new Answer(CancelLikeEmoji, e=>{
+					_ = ApplyPrivateReactionsAsync(e.User, CancelLikeEmoji).ConfigureAwait(false);
+				}),
+				new Answer(DisLikeEmoji, e=>{
+					_ = ApplyPrivateReactionsAsync(e.User, DisLikeEmoji).ConfigureAwait(false);
+				}),
+				new Answer(TimeEmoji, e=>{
+					_ = ApplyPrivateReactionsAsync(e.User, TimeEmoji).ConfigureAwait(false);
+				})
+			};
 
-			async Task applyDefaultReactions() {
-				await PrivateControlsMessage.CreateReactionAsync(LikeEmoji).ConfigureAwait(false);
-				await PrivateControlsMessage.CreateReactionAsync(CancelLikeEmoji).ConfigureAwait(false);
-				await PrivateControlsMessage.CreateReactionAsync(DisLikeEmoji).ConfigureAwait(false);
-				await PrivateControlsMessage.CreateReactionAsync(TimeEmoji).ConfigureAwait(false);
-			}
+			PrivateControlsMessage = await DialogFramework.CreateQuestion(DateTextChannel, PrivateMessageBody, answers,
+				existingMessage:DateTextChannel.GetMessageAsync(PrivateControlsMessageId).Result,
+				behavior: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero).ConfigureAwait(false);
+			PrivateControlsMessageId = PrivateControlsMessage.Id;
 		}
 
 		private async Task ApplyPrivateReactionsAsync(DiscordUser u, DiscordEmoji emoji) {
@@ -223,38 +214,58 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <returns></returns>
 		public async Task WelcomeMessageInit() {
-
-			try {
-				WelcomeMessage = await DateLobby.GetMessageAsync(WelcomeMessageId);
-			} catch (Exception) { }
-			if (WelcomeMessage == null) {
-				//Add welcome message and default reactions
-				WelcomeMessage = await DateLobby.SendMessageAsync(WelcomeMessageBody);
-				WelcomeMessageId = WelcomeMessage.Id;
-				_ = applyDefaultReactions().ConfigureAwait(false);
-				_ = WelcomeMessage.PinAsync().ConfigureAwait(false);
-			} else {
-				var wm = DateLobby.GetMessageAsync(WelcomeMessageId).Result;
-				foreach (var r in wm.Reactions.ToArray()) {
-					if (r.Emoji == MaleEmoji || r.Emoji == FemaleEmoji || OptionEmojis.Contains(r.Emoji)) {
-						foreach (var u in wm.GetReactionsAsync(r.Emoji).Result.Where(r => r.Id != DateBot.Instance.BotId)) {
-							ApplyGenderAndOptionReactions(u, r.Emoji);
-							_ = WelcomeMessage.DeleteReactionAsync(r.Emoji, u).ConfigureAwait(false);
-						}
-					} else
-						await WelcomeMessage.DeleteReactionsEmojiAsync(r.Emoji).ConfigureAwait(false);
-				}
-				_ = applyDefaultReactions().ConfigureAwait(false);
+			//TODO Would be nice to have an override for one action with many emojis, passing emoji in for simplicity
+			var answers = new Answer[2 + OptionEmojis.Count()];
+			answers[0] = new Answer(MaleEmoji, e => {
+				//TODO doesn't add those that are not yet in activity
+				AllUserStates.TryGetValue(e.User.Id, out var uState);
+				uState.Gender = GenderEnum.Male;
+				uState.AgeOptions = 0;
+			});
+			answers[1] = new Answer(FemaleEmoji, e => {
+				AllUserStates.TryGetValue(e.User.Id, out var uState);
+				uState.Gender = GenderEnum.Female;
+				uState.AgeOptions = 0;
+			});
+			for (int i = 2; i < answers.Length; i++) {
+				var index = i;
+				answers[index] = new Answer(OptionEmojis[index - 2], e => {
+					AllUserStates.TryGetValue(e.User.Id, out var uState);
+					var option = 1 << (index - 2);
+					if (uState.Gender == GenderEnum.Female)
+						uState.AgeOptions ^= option; //toggle age group
+					else
+						uState.AgeOptions = option;
+				});
 			}
 
-			async Task applyDefaultReactions() {
-				await WelcomeMessage.CreateReactionAsync(MaleEmoji);
-				await WelcomeMessage.CreateReactionAsync(FemaleEmoji);
-				foreach (var optionEmoji in OptionEmojis.ToArray()) {
-					await WelcomeMessage.CreateReactionAsync(optionEmoji);
-				}
-			}
+			WelcomeMessage = await DialogFramework.CreateQuestion(DateTextChannel, WelcomeMessageBody, answers,
+				existingMessage: DateTextChannel.GetMessageAsync(WelcomeMessageId).Result,
+				behavior: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero);
+			WelcomeMessageId = WelcomeMessage.Id;
 		}
+
+
+		//public void ApplyGenderAndOptionReactions(DiscordUser user, DiscordEmoji emoji) {
+		//	AllUserStates.TryGetValue(user.Id, out var uState);
+		//	if (uState == null) {
+		//		uState = new UserState() { UserId = user.Id };
+		//		AllUserStates.Add(user.Id, uState);
+		//	}
+		//	if (emoji == MaleEmoji) {
+		//		uState.Gender = GenderEnum.Male;
+		//		WelcomeMessage.DeleteReactionAsync(MaleEmoji, user);
+		//		uState.AgeOptions = 0;
+		//	} else if (emoji == FemaleEmoji) {
+		//		uState.Gender = GenderEnum.Female;
+		//		WelcomeMessage.DeleteReactionAsync(FemaleEmoji, user);
+		//		uState.AgeOptions = 0;
+		//	} else {
+		//		var option = OptionEmojis.IndexOf(emoji);
+		//		uState.AgeOptions ^= option; //toggle age group
+		//	}
+		//}
+
 		/// <summary>
 		/// Checks lobbies, cleans them, refreshes users, checks secret rooms updates timeouts, cleans them
 		/// TODO change secret room behaviour
@@ -310,26 +321,6 @@ namespace DateBot.Base {
 			DateVoiceLobbies.Add(c);
 		}
 
-		public void ApplyGenderAndOptionReactions(DiscordUser user, DiscordEmoji emoji) {
-			AllUserStates.TryGetValue(user.Id, out var uState);
-			if (uState == null) {
-				uState = new UserState() { UserId = user.Id };
-				AllUserStates.Add(user.Id, uState);
-			}
-			if (emoji == MaleEmoji) {
-				uState.Gender = GenderEnum.Male;
-				WelcomeMessage.DeleteReactionAsync(MaleEmoji, user);
-				uState.AgeOptions = 0;
-			} else if (emoji == FemaleEmoji) {
-				uState.Gender = GenderEnum.Female;
-				WelcomeMessage.DeleteReactionAsync(FemaleEmoji, user);
-				uState.AgeOptions = 0;
-			} else {
-				var option = OptionEmojis.IndexOf(emoji);
-				uState.AgeOptions ^= option; //toggle age group
-			}
-		}
-
 		/// <summary>
 		/// User changed state in voice lobbies (joined/left)
 		/// </summary>
@@ -348,9 +339,7 @@ namespace DateBot.Base {
 				if (!beforeInLobbies && !beforeInSecretRooms && afterInLobbies) {
 					//User connected to lobbies
 					DebugLogWriteLine($"User {e.User} connected to {e.Channel} ");
-					if (!UsersInLobbies.Contains(e.User)) UsersInLobbies.Add(e.User);
-					if (!AllUserStates.ContainsKey(e.User.Id))
-						AllUserStates.Add(e.User.Id, new UserState() { UserId = e.User.Id, LastEnteredLobbyTime = DateTime.Now });
+					UserConnected_AddToActivity(e.User);
 					//Start matching session
 					TryStartMatchingTask();
 
@@ -360,7 +349,6 @@ namespace DateBot.Base {
 					if (beforeInLobbies) {
 						UsersInLobbies.Remove(e.User);
 						RemoveStateFor(e.User);
-						TryCombLobbies();
 					}
 					//remove disband secret room if one left TODO check logic
 					if (beforeInSecretRooms) {
@@ -373,24 +361,24 @@ namespace DateBot.Base {
 				} else if (beforeInLobbies && afterInLobbies) {
 					DebugLogWriteLine($"User {e.User} switched lobbies ");
 					//User switched Lobbies
-					TryCombLobbies();
 
 				} else if (beforeInLobbies && afterInSecretRooms) {
 					DebugLogWriteLine($"User {e.User} moved to {e.After.Channel} ");
 					//Moved to secret room
 					UsersInLobbies.Remove(e.User);
-					TryCombLobbies();
 
 				} else if (beforeInSecretRooms && afterInLobbies) {
 					//Returned from secret room
 					RemoveStateFor(e.User);
 					DebugLogWriteLine($"User {e.User} returned to lobby, trying to disbnad {e.Before.Channel}... ");
-					if (!UsersInLobbies.Contains(e.User)) UsersInLobbies.Add(e.User);
+					UserConnected_AddToActivity(e.User);
 					await disbandRemoveSecretRoom(e.Before.Channel).ConfigureAwait(false);
 					//DebugLogWrite($"{e.Before.Channel} removed/disbanded. Starting MatchingTask");
 					//Start matching session
 					TryStartMatchingTask();
 				}
+
+				TryCombLobbies();
 			}
 
 			async Task disbandRemoveSecretRoom(DiscordChannel channel) {
@@ -412,6 +400,12 @@ namespace DateBot.Base {
 			}
 		}
 
+		private void UserConnected_AddToActivity(DiscordUser User) {
+			if (!UsersInLobbies.Contains(User)) UsersInLobbies.Add(User);
+			if (!AllUserStates.ContainsKey(User.Id))
+				AllUserStates.Add(User.Id, new UserState() { UserId = User.Id, LastEnteredLobbyTime = DateTime.Now });
+		}
+
 		private void RemoveStateFor(DiscordUser User) {
 			AllUserStates.TryGetValue(User.Id, out var uState);
 			uState.EnteredPrivateRoomTime = null;
@@ -424,7 +418,6 @@ namespace DateBot.Base {
 				//await (CurrentMatchingTask = MatchingTask()).ConfigureAwait(false);
 				{
 				CurrentCombLobbiesTask = CombLobbies();
-				CurrentCombLobbiesTask.ConfigureAwait(false);
 			}
 		}
 
@@ -580,7 +573,7 @@ namespace DateBot.Base {
 
 					timeout = UpdateTimeout(pair.Users);
 					foreach (var p in pair.Users) {
-						await p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}").ConfigureAwait(false);
+						_ = p.SendMessageAsync($"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for {string.Join(", ", pair.Users.Select(p => p.DisplayName))}");
 					}
 
 					await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds + 100, 0));
@@ -598,13 +591,19 @@ namespace DateBot.Base {
 			DebugLogWriteLine($"Timeout Disbanding {pair.Users[0]} and {pair.Users[1]}");
 			foreach (var p in pair.Users.ToArray()) {
 				//Return participants to lobby 0
-				_ = DateVoiceLobbies[0].PlaceMemberAsync(p).ConfigureAwait(false);
+				ReturnUserToFirstLobbyAvailable(p);
 			}
 		}
 
+		private void ReturnUserToFirstLobbyAvailable(DiscordMember p) {
+
+			_ = DateVoiceLobbies.FirstOrDefault(l => l.UserLimit == 0 || l.UserLimit < l.Users.Count())
+				.PlaceMemberAsync(p).ConfigureAwait(false);
+		}
 
 		private async Task CombLobbies() {
-			await Task.Delay(1000);
+			//Do we really need this?
+			//await Task.Delay(1000);
 			//Comb lobbies
 			DateVoiceLobbies.Clear();
 			DateVoiceLobbies.AddRange(GetVoiceLobbies(true));
@@ -625,31 +624,5 @@ namespace DateBot.Base {
 
 			CurrentCombLobbiesTask = null;
 		}
-
-		internal void MessageReactionAdded(MessageReactionAddEventArgs e) {
-			if (e.User.Id == DateBot.Instance.BotId) return;
-			try {
-				if (e.Message.Id == WelcomeMessage.Id) {
-					if (e.Emoji.Id == MaleEmoji.Id || e.Emoji.Id == FemaleEmoji.Id || OptionEmojis.Contains(e.Emoji)) {
-						ApplyGenderAndOptionReactions(e.User, e.Emoji);
-					}
-					_ = e.Message.DeleteReactionAsync(e.Emoji, e.User).ConfigureAwait(false);
-				} else if (e.Message.Id == PrivateControlsMessageId) {
-					if (e.Emoji.Id == LikeEmoji.Id || e.Emoji.Id == DisLikeEmoji.Id || e.Emoji.Id == TimeEmoji.Id) {
-						_ = ApplyPrivateReactionsAsync(e.User, e.Emoji).ConfigureAwait(false);
-					}
-					_ = e.Message.DeleteReactionAsync(e.Emoji, e.User).ConfigureAwait(false);
-				}
-			} catch (Exception) { }
-		}
-
-		//internal void MessageReactionRemoved(MessageReactionRemoveEventArgs e) {
-		//	if (e.User.Id == DateBot.Instance.BotId) return;
-		//	if (e.Message.ChannelId == DateSecretCategoryId) {
-		//		if (e.Emoji.Id == LikeEmoji.Id || e.Emoji.Id == DisLikeEmoji.Id || e.Emoji.Id == TimeEmoji.Id) {
-		//			SecretChannelReaction(e.Emoji, e.User, e.Message, false);
-		//		}
-		//	}
-		//}
 	}
 }

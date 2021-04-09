@@ -11,22 +11,35 @@ namespace ZBot.DialogFramework {
 		/// <param name="emoji"></param>
 		/// <param name="stringTokens"></param>
 		/// <param name="onAnswer">Must return true if handled well. In case answer wasn't acceptable, should return false</param>
-		public Answer(DiscordEmoji emoji, string[] stringTokens, Func<AnswerArgs, Task<bool>> onAnswer) {
+		public Answer(DiscordEmoji emoji, string[] stringTokens, Func<string, bool> validateAnswer, Func<AnswerArgs, Task> onAnswer) {
 			Emoji = emoji;
 			//Just to make sure it will always be lowercase
-			StringTokens = stringTokens.Select(s=>s.ToLower()).ToArray();
+			StringTokens = stringTokens.Select(s => s.ToLower()).ToArray();
+			ValidateAnswer = validateAnswer;
 			if (onAnswer != default)
 				OnAnswer = onAnswer;
 			else
 				OnAnswer = e => Task.FromResult(false);
 		}
 
-		public Answer(DiscordEmoji emoji, Func<AnswerArgs, Task> onAnswer) {
+		public Answer(DiscordEmoji emoji, string[] stringTokens, Func<AnswerArgs, Task> onAnswer) {
+			Emoji = emoji;
+			//Just to make sure it will always be lowercase
+			StringTokens = stringTokens.Select(s => s.ToLower()).ToArray();
+			ValidateAnswer = s => true;
+			if (onAnswer != default)
+				OnAnswer = onAnswer;
+			else
+				OnAnswer = e => Task.FromResult(false);
+		}
+
+		public Answer(DiscordEmoji emoji, Action<AnswerArgs> onAnswer) {
 			Emoji = emoji;
 			StringTokens = new string[0];
+			ValidateAnswer = s => true;
 			if (onAnswer != default)
-				OnAnswer = e => { 
-					_ = onAnswer(e).ConfigureAwait(false);
+				OnAnswer = e => {
+					Task.Run(() => onAnswer(e));
 					return Task.FromResult(true); 
 				};
 			else
@@ -34,40 +47,45 @@ namespace ZBot.DialogFramework {
 		}
 
 		public DiscordEmoji Emoji { get; }
+		public Func<string, bool> ValidateAnswer { get; }
 		public string[] StringTokens { get; }
-		public Func<AnswerArgs, Task<bool>> OnAnswer { get; }
+		public Func<AnswerArgs, Task> OnAnswer { get; }
 
-		public async Task<bool> InvokeFromEmoji(DiscordUser user) {
-			return await OnAnswer(new AnswerArgs(user));
+		public async Task InvokeFromEmoji(DiscordUser user, DiscordMessageState question) {
+			await OnAnswer(new AnswerArgs(user, question));
 		}
 
-		public async Task<bool> InvokeFromMessage(DiscordMessageState message) {
-			return await OnAnswer(new AnswerArgs(message.Author, true, message));
+		public async Task InvokeFromMessage(DiscordMessageState message, DiscordMessageState question) {
+			await OnAnswer(new AnswerArgs(message.Author, true, message, question));
 		}
 
 		public struct AnswerArgs {
-			public AnswerArgs(DiscordUser user, bool isMessage, DiscordMessageState message) {
+			public AnswerArgs(DiscordUser user, bool isMessage, DiscordMessageState message, DiscordMessageState question) {
 				User = user;
 				IsMessage = isMessage;
 				Message = message;
+				Question = question;
 			}
 
-			public AnswerArgs(DiscordUser user) {
+			public AnswerArgs(DiscordUser user, DiscordMessageState question) {
 				User = user;
 				IsMessage = false;
 				Message = default;
+				Question = question;
 			}
 
 			public DiscordUser User { get; }
 			public bool IsMessage { get; }
 			public DiscordMessageState Message { get; }
+			public DiscordMessageState Question { get; }
 		}
 
 		public struct DiscordMessageState {
-			public DiscordMessageState(DiscordChannel channel, string content, DiscordUser author) {
+			public DiscordMessageState(DiscordChannel channel, string content, DiscordUser author, ulong id) {
 				Channel = channel;
 				Content = content;
 				Author = author;
+				Id = id;
 			}
 
 			//
@@ -82,9 +100,10 @@ namespace ZBot.DialogFramework {
 			// Summary:
 			//     Gets the user or member that sent the message.
 			public DiscordUser Author { get; }
+			public ulong Id { get; }
 
 
-			public static implicit operator DiscordMessageState(DiscordMessage m) => new DiscordMessageState(m.Channel, m.Content, m.Author);
+			public static implicit operator DiscordMessageState(DiscordMessage m) => new DiscordMessageState(m.Channel, m.Content, m.Author, m.Id);
 		}
 	}
 }

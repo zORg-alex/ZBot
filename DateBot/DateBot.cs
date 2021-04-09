@@ -33,7 +33,6 @@ namespace DateBot.Base {
 
 		internal void AddGuild(GuildTask config) {
 			State.Guilds.Add(config);
-			//OnBeforeExit().ConfigureAwait(false);
 		}
 
 		internal GuildTask GetGuild(ulong guildId) => State.Guilds.FirstOrDefault(g => g.GuildId == guildId);
@@ -49,7 +48,7 @@ namespace DateBot.Base {
 		/// <returns></returns>
 		public async Task SaveStates() {
 			try {
-				if (State != null && State.Guilds.Count > 0)
+				if (State != null)
 					using (var sr = new StreamWriter("botState.json")) {
 						await sr.WriteAsync(JsonConvert.SerializeObject(State, Formatting.Indented));
 					}
@@ -88,7 +87,7 @@ namespace DateBot.Base {
 			//}
 
 			Client.VoiceStateUpdated += Client_VoiceStateUpdated;
-			Client.MessageReactionAdded += Client_MessageReactionAdded;
+			//Client.MessageReactionAdded += Client_MessageReactionAdded;
 			//Client.MessageReactionRemoved += Client_MessageReactionRemoved; ;
 
 			//????
@@ -111,27 +110,6 @@ namespace DateBot.Base {
 				await gt.InitTask.ConfigureAwait(false);
 			}
 		}
-
-		/// <summary>
-		/// Call on Guild Reaction added
-		/// </summary>
-		/// <param name="e"></param>
-		/// <returns></returns>
-		private Task Client_MessageReactionAdded(MessageReactionAddEventArgs e) {
-			var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == e.Guild.Id);
-			if (g != null) {
-				g.MessageReactionAdded(e);
-			}
-			return null;
-		}
-		//private Task Client_MessageReactionRemoved(MessageReactionRemoveEventArgs e) {
-		//	var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == e.Guild.Id);
-		//	if (g != null) {
-		//		g.MessageReactionRemoved(e);
-		//	}
-		//	return null;
-		//}
-
 
 		/// <summary>
 		/// VoiceChannel update redirects to a registered guild
