@@ -39,6 +39,8 @@ namespace DateBot.Base {
 		public DiscordEmoji CancelLikeEmoji { get; set; }
 		public DiscordEmoji TimeEmoji { get; set; }
 
+		public bool Active { get; private set; }
+
 		public void DebugLogWriteLine(string message) {
 			Console.Write($"\n{message}");
 			//LogMessage?.ModifyAsync(LogMessage.Content + '\n' + message);
@@ -422,7 +424,7 @@ namespace DateBot.Base {
 		}
 
 		private void TryStartMatchingTask() {
-			if (CurrentMatchingTask == null)
+			if (CurrentMatchingTask == null && Active)
 				//await (CurrentMatchingTask = MatchingTask()).ConfigureAwait(false);
 				{
 				CurrentMatchingTask = MatchingTask();
@@ -434,6 +436,10 @@ namespace DateBot.Base {
 			//Wait some time
 			DebugLogWriteLine("MatchingTask started, waiting");
 			await Task.Delay(30000);
+			if (!Active) {
+				DebugLogWriteLine("MatchingTask canceled. Set Active to false");
+				return; 
+			}
 			//Get all users
 			DebugLogWriteLine("MatchingTask Matching");
 			DateVoiceLobbies.Clear();
@@ -623,6 +629,17 @@ namespace DateBot.Base {
 			}
 
 			CurrentCombLobbiesTask = null;
+		}
+
+		public void StartActivity() {
+			Active = true;
+			if (UsersInLobbies.Count > 0)
+				TryStartMatchingTask();
+		}
+
+		public void StopActivity() {
+			Active = false;
+			CurrentMatchingTask = null;
 		}
 	}
 }

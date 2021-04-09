@@ -93,6 +93,17 @@ namespace DateBot.Base {
 				}
 			}
 		}
+
+		[Command("start")]
+		public async Task Start(CommandContext ctx) {
+			var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			config.StartActivity();
+		}
+		[Command("stop")]
+		public async Task Stop(CommandContext ctx) {
+			var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			config.StopActivity();
+		}
 		[Command("date-bot-adduser")]
 		[Aliases("adduser")]
 		public async Task AddUser(CommandContext ctx, ulong id, int gender, int age, params ulong[] likedIds) {
