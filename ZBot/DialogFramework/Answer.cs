@@ -30,7 +30,7 @@ namespace ZBot.DialogFramework {
 			if (onAnswer != default)
 				OnAnswer = onAnswer;
 			else
-				OnAnswer = e => Task.FromResult(false);
+				OnAnswer = e => Task.CompletedTask;
 		}
 
 		public Answer(DiscordEmoji emoji, Action<AnswerArgs> onAnswer) {
@@ -40,10 +40,10 @@ namespace ZBot.DialogFramework {
 			if (onAnswer != default)
 				OnAnswer = e => {
 					Task.Run(() => onAnswer(e));
-					return Task.FromResult(true); 
+					return Task.CompletedTask; 
 				};
 			else
-				OnAnswer = e => Task.FromResult(false);
+				OnAnswer = e => Task.CompletedTask;
 		}
 
 		public DiscordEmoji Emoji { get; }

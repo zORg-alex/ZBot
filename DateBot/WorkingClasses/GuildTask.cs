@@ -4,8 +4,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using DiscordRPC;
-using DiscordRPC.Message;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
@@ -106,21 +104,19 @@ namespace DateBot.Base {
 
 			//DebugLogWrite("Initiating Emojis... ");
 			//GetEmojis
-			MaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, MaleEmojiId);
-			FemaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, FemaleEmojiId);
+			MaleEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, MaleEmojiId);
+			FemaleEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, FemaleEmojiId);
 			OptionEmojis.Clear();
-			OptionEmojis.AddRange(OptionEmojiIds.Select(id=>DiscordEmoji.FromName(DateBot.Instance.Client, id)));
-			LikeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, LikeEmojiId);
-			DisLikeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, DisLikeEmojiId);
-			TimeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, TimeEmojiId);
-			CancelLikeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, CancelLikeEmojiId);
+			OptionEmojis.AddRange(OptionEmojiIds.Select(id=>DiscordEmoji.FromUnicode(DateBot.Instance.Client, id)));
+			LikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, LikeEmojiId);
+			DisLikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, DisLikeEmojiId);
+			TimeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, TimeEmojiId);
+			CancelLikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, CancelLikeEmojiId);
 
 			//DebugLogWrite("Initiating Users in lobbies... ");
 			//Check and add users in lobbies
 			foreach (var u in UsersInLobbies.ToArray()) {
-				if (!AllUserStates.ContainsKey(u.Id)) {
-					AllUserStates.Add(u.Id, new UserState() { UserId = u.Id, LastEnteredLobbyTime = DateTime.Now });
-				}
+				AddOrGetUserState(u).LastEnteredLobbyTime = DateTime.Now;
 			}
 
 			//DebugLogWrite("Initiating Welcome message... ");
@@ -141,6 +137,7 @@ namespace DateBot.Base {
 		}
 
 		public async Task PrivateControlsMessageInit() {
+			var existingControlsMessage = DateTextChannel.GetMessageAsync(PrivateControlsMessageId);
 			var answers = new Answer[] {
 				new Answer(LikeEmoji, e=>{
 					_ = ApplyPrivateReactionsAsync(e.User, LikeEmoji).ConfigureAwait(false);
@@ -156,21 +153,22 @@ namespace DateBot.Base {
 				})
 			};
 
+			Task.WaitAny(new Task[] { existingControlsMessage, Task.Delay(5000) });
 			PrivateControlsMessage = await DialogFramework.CreateQuestion(DateTextChannel, PrivateMessageBody, answers,
-				existingMessage:DateTextChannel.GetMessageAsync(PrivateControlsMessageId).Result,
+				existingMessage: !existingControlsMessage.IsFaulted ? existingControlsMessage.Result : null,
 				behavior: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero).ConfigureAwait(false);
 			PrivateControlsMessageId = PrivateControlsMessage.Id;
 		}
 
 		private async Task ApplyPrivateReactionsAsync(DiscordUser u, DiscordEmoji emoji) {
-			AllUserStates.TryGetValue(u.Id, out var uState);
+			UserState uState = AddOrGetUserState(u);
 			var pair = PairsInSecretRooms.FirstOrDefault(p => p.Users.Contains(u));
 			if (pair != null) {
 				var users = pair.Users;
 				var user = users.FirstOrDefault(x => x.Id == u.Id);
 				var mate = users.FirstOrDefault(x => x.Id != u.Id);
 				if (mate != null) {
-					AllUserStates.TryGetValue(mate.Id, out var mateState);
+					UserState mateState = AddOrGetUserState(mate);
 					if (emoji == LikeEmoji) {
 						if (!uState.LikedUserIds.Contains(mate.Id))
 							uState.LikedUserIds.Add(mate.Id);
@@ -216,23 +214,25 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <returns></returns>
 		public async Task WelcomeMessageInit() {
+			var existingWelcomeMessage = DateTextChannel.GetMessageAsync(WelcomeMessageId);
 			//TODO Would be nice to have an override for one action with many emojis, passing emoji in for simplicity
 			var answers = new Answer[2 + OptionEmojis.Count()];
 			answers[0] = new Answer(MaleEmoji, e => {
 				//TODO doesn't add those that are not yet in activity
-				AllUserStates.TryGetValue(e.User.Id, out var uState);
+
+				UserState uState = AddOrGetUserState(e.User);
 				uState.Gender = GenderEnum.Male;
 				uState.AgeOptions = 0;
 			});
 			answers[1] = new Answer(FemaleEmoji, e => {
-				AllUserStates.TryGetValue(e.User.Id, out var uState);
+				UserState uState = AddOrGetUserState(e.User);
 				uState.Gender = GenderEnum.Female;
 				uState.AgeOptions = 0;
 			});
 			for (int i = 2; i < answers.Length; i++) {
 				var index = i;
 				answers[index] = new Answer(OptionEmojis[index - 2], e => {
-					AllUserStates.TryGetValue(e.User.Id, out var uState);
+					UserState uState = AddOrGetUserState(e.User);
 					var option = 1 << (index - 2);
 					if (uState.Gender == GenderEnum.Female)
 						uState.AgeOptions ^= option; //toggle age group
@@ -241,10 +241,20 @@ namespace DateBot.Base {
 				});
 			}
 
+			Task.WaitAny(new Task[] { existingWelcomeMessage, Task.Delay(5000)});
 			WelcomeMessage = await DialogFramework.CreateQuestion(DateTextChannel, WelcomeMessageBody, answers,
-				existingMessage: DateTextChannel.GetMessageAsync(WelcomeMessageId).Result,
+				existingMessage: !existingWelcomeMessage.IsFaulted ? existingWelcomeMessage.Result : null,
 				behavior: MessageBehavior.Permanent, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero);
 			WelcomeMessageId = WelcomeMessage.Id;
+		}
+
+		private UserState AddOrGetUserState(DiscordUser User) {
+			AllUserStates.TryGetValue(User.Id, out var uState);
+			if (uState == null) {
+				uState = new UserState() { UserId = User.Id };
+				AllUserStates.Add(User.Id, uState);
+			}
+			return uState;
 		}
 
 
@@ -282,7 +292,7 @@ namespace DateBot.Base {
 			PairsInSecretRooms.Clear();
 			foreach (var r in SecretRooms.ToArray()) {
 				if (r.Users.Count() > 1) {
-					AllUserStates.TryGetValue(r.Users.First().Id, out var uState);
+					var uState = AddOrGetUserState(r.Users.First());
 					var pair = new PairInSecretRoom() { SecretRoom = r, Users = r.Users.ToList() };
 					//Try get timeout
 					if (uState != null && uState.EnteredPrivateRoomTime.HasValue) pair.Timeout = uState.EnteredPrivateRoomTime.Value.AddMilliseconds(SecretRoomTime);
@@ -403,13 +413,11 @@ namespace DateBot.Base {
 		}
 
 		private void UserConnected_AddToActivity(DiscordUser User) {
-			if (!UsersInLobbies.Contains(User)) UsersInLobbies.Add(User);
-			if (!AllUserStates.ContainsKey(User.Id))
-				AllUserStates.Add(User.Id, new UserState() { UserId = User.Id, LastEnteredLobbyTime = DateTime.Now });
+			AddOrGetUserState(User).LastEnteredLobbyTime = DateTime.Now;
 		}
 
 		private void RemoveStateFor(DiscordUser User) {
-			AllUserStates.TryGetValue(User.Id, out var uState);
+			var uState = AddOrGetUserState(User);
 			uState.EnteredPrivateRoomTime = null;
 			PairsInSecretRooms.RemoveAll(p => p.Users.Contains(User));
 
@@ -552,8 +560,8 @@ namespace DateBot.Base {
 		[System.Diagnostics.DebuggerNonUserCode]
 		private DateTime UpdateTimeout(List<DiscordMember> Users) {
 			try {
-				AllUserStates.TryGetValue(Users[0].Id, out var uStateA);
-				AllUserStates.TryGetValue(Users[1].Id, out var uStateB);
+				var uStateA = AddOrGetUserState(Users[0]);
+				var uStateB = AddOrGetUserState(Users[1]);
 
 				return (uStateA.EnteredPrivateRoomTime < uStateB.EnteredPrivateRoomTime ? uStateA.EnteredPrivateRoomTime : uStateB.EnteredPrivateRoomTime).Value;
 			} catch (Exception) { }

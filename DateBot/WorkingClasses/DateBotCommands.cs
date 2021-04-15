@@ -97,11 +97,13 @@ namespace DateBot.Base {
 		[Command("start")]
 		public async Task Start(CommandContext ctx) {
 			var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Started activity");
 			config.StartActivity();
 		}
 		[Command("stop")]
 		public async Task Stop(CommandContext ctx) {
 			var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Stopped activity");
 			config.StopActivity();
 		}
 		[Command("date-bot-adduser")]

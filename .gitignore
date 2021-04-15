@@ -338,3 +338,5 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+Bot.Console/Properties/launchSettings.json
+DummyBot.ConsoleApp/Properties/launchSettings.json

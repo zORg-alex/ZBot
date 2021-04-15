@@ -194,7 +194,7 @@ namespace ZBot.DialogFramework {
 				//Clean others
 				foreach (var p in existingReactions.SelectMany(r => message.GetReactionsAsync(r.Emoji).Result.Select((u) => (User: u, Reaction: r)))) {
 					if (p.User.IsCurrent) continue;
-					if (processOld)
+					if (processOld && answerEmojis.Contains(p.Reaction.Emoji))
 						await answers.FirstOrDefault(a => a.Emoji == p.Reaction.Emoji).InvokeFromEmoji(p.User, message);
 					if (deleteOld)
 						await message.DeleteReactionAsync(p.Reaction.Emoji, p.User);
