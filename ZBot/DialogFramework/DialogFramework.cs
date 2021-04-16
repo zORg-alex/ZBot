@@ -211,12 +211,32 @@ namespace ZBot.DialogFramework {
 
 		private static TimeSpan DefaultQuickMessageTimeout { get; set; } = TimeSpan.FromSeconds(5);
 		public static async Task QuickVolatileMessage(DiscordChannel channel, string message, TimeSpan? timeout = null) {
-			if (!timeout.HasValue)
-				timeout = DefaultQuickMessageTimeout;
+			var Timeout = timeout.HasValue ? timeout.Value : DefaultQuickMessageTimeout;
 
 			var Message = await channel.SendMessageAsync(message).ConfigureAwait(false);
-			await Task.Delay((int)timeout.Value.TotalMilliseconds);
+			await Task.Delay((int)Timeout.TotalMilliseconds);
 
+			await Message.DeleteAsync();
+		}
+
+		private static TimeSpan DefaultQuickMessageUpdateStep { get; set; } = TimeSpan.FromSeconds(5);
+		public static async Task QuickVolatileMessage(DiscordChannel channel, Func<string> message, TimeSpan? updateStep = null, TimeSpan? timeout = null) {
+			var Timeout = timeout.HasValue ? timeout.Value : DefaultQuickMessageTimeout;
+			var UpdateStep = updateStep.HasValue ? updateStep.Value : DefaultQuickMessageUpdateStep;
+
+			if (UpdateStep > Timeout) {
+				await QuickVolatileMessage(channel, message(), Timeout).ConfigureAwait(false);
+				return;
+			}
+
+			DateTime timeoutTime = DateTime.Now + Timeout;
+
+			var Message = await channel.SendMessageAsync(message()).ConfigureAwait(false);
+
+			while(timeoutTime > DateTime.Now) {
+				await Task.Delay((int)(UpdateStep.TotalMilliseconds % (timeoutTime - DateTime.Now).TotalMilliseconds));
+				await Message.ModifyAsync(message()).ConfigureAwait(false);
+			}
 			await Message.DeleteAsync();
 		}
 
