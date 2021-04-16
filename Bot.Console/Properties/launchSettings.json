@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "_DateBot.Console": {
-      "commandName": "Project",
-      "commandLineArgs": "/token:NzM4OTk1MjU2NzI0NTUzNzkw.XyUA9w.l_ogm0FSMQPwD7Aw0CfwhRR9dZc /prefix:? /clientid:738995256724553790"
-    }
-  }
-}
