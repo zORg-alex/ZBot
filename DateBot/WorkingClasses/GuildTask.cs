@@ -446,27 +446,30 @@ namespace DateBot.Base {
 			await Task.Delay(30000);
 			if (!Active) {
 				DebugLogWriteLine("MatchingTask canceled. Set Active to false");
-				return; 
+				return;
 			}
 			//Get all users
 			DebugLogWriteLine("MatchingTask Matching");
-			DateVoiceLobbies.Clear();
-			DateVoiceLobbies.AddRange(GetVoiceLobbies(true));
+			RefreshDateVoiceLobbies();
 			RefreshUsersInLobbies();
 			//Match users
 			//Move pairs
 			TryMatchUsers();
 
 			//Removeitself or restart
-			DateVoiceLobbies.Clear();
-			DateVoiceLobbies.AddRange(GetVoiceLobbies(true));
+			RefreshDateVoiceLobbies();
 			RefreshUsersInLobbies();
 			if (UsersInLobbies.Count > 4) {
+				DebugLogWriteLine("Try restart MatchingTask");
 				//Restart? if not same gender
-				CurrentMatchingTask = MatchingTask();
-				_ = CurrentMatchingTask.ConfigureAwait(false);
+				TryStartMatchingTask();
 			} else
 				CurrentMatchingTask = null;
+		}
+
+		private void RefreshDateVoiceLobbies() {
+			DateVoiceLobbies.Clear();
+			DateVoiceLobbies.AddRange(GetVoiceLobbies(true));
 		}
 
 		private void TryMatchUsers() {

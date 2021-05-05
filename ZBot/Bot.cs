@@ -25,7 +25,7 @@ namespace ZBot {
 		public InteractivityExtension InteractivityConfiguration { get; protected set; }
 		public Voice​Next​Extension Voice​Next​Configuration { get; protected set; }
 
-		public Bot(Dictionary<string, string> args) {
+		public Bot(Dictionary<string, string> args, bool useInteractivity = false, int interactivityTimeout = 30000, bool useVoiceNext = false) {
 			if (Instance != null)
 				throw new InvalidOperationException("Instance is already running");
 			Instance = this;
@@ -36,13 +36,13 @@ namespace ZBot {
 					conf = new BotConfig() { Token = args["token"], Prefix = args["prefix"] };
 			} catch { throw new ArgumentException("Couldn't find token and prefix arguements"); }
 
-			ConfigBotAsync(conf).ConfigureAwait(false);
+			ConfigBotAsync(conf, useInteractivity, interactivityTimeout, useVoiceNext).ConfigureAwait(false);
 		}
 		/// <summary>
 		/// Initializes the bot Asynchronously
 		/// </summary>
 		/// <returns></returns>
-		public async Task ConfigBotAsync(BotConfig connectionConfig = null) {
+		public async Task ConfigBotAsync(BotConfig connectionConfig = null, bool useInteractivity = false, int interactivityTimeout = 30000, bool useVoiceNext = false) {
 			//Read bot connection config
 			if (connectionConfig == null) connectionConfig = JsonConvert.DeserializeObject<BotConfig>(
 				await new StreamReader("config.json").ReadToEndAsync()
@@ -63,12 +63,14 @@ namespace ZBot {
 					EnableDms = true
 				});
 
-			InteractivityConfiguration = Client.UseInteractivity(
-				new InteractivityConfiguration {
-					Timeout = TimeSpan.FromSeconds(30)
-				});
+			if (useInteractivity)
+				InteractivityConfiguration = Client.UseInteractivity(
+					new InteractivityConfiguration {
+						Timeout = TimeSpan.FromSeconds(30)
+					});
 
-			Voice​Next​Configuration = Client.UseVoiceNext();
+			if (useVoiceNext)
+				Voice​Next​Configuration = Client.UseVoiceNext();
 
 			RegisterCommands();
 

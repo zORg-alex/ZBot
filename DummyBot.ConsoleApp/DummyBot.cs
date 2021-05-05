@@ -12,7 +12,7 @@ namespace DummyBot.ConsoleApp {
 	public class DummyBot : Bot {
 
 		public static new DummyBot Instance {get; private set;}
-		public DummyBot(Dictionary<string, string> args) : base(args) {
+		public DummyBot(Dictionary<string, string> args) : base(args, useVoiceNext:true) {
 			Instance = this;
 		}
 
