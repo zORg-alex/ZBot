@@ -4,7 +4,7 @@ using System.Runtime.Serialization;
 
 namespace DateBot.Base {
 	[DataContract]
-	public class GuildConfig {
+	public class DateBotGuildConfig {
 		[DataMember]
 		public ulong GuildId { get; set; }
 		[DataMember]

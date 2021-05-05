@@ -30,7 +30,7 @@ namespace DateBot.Base {
 				config_.Initialize(ctx.Guild).Wait();
 				await DateBot.Instance.SaveStates().ConfigureAwait(false);
 			} else {
-				var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
+				var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
 
 				bool regenerateWelcomeMessage = false;
 				bool reinit = false;
@@ -125,7 +125,7 @@ namespace DateBot.Base {
 			//We need to set quite a few things in this menu, so it is broken down to smaller bits.
 			//Many menus are the same, except few words and where values go
 
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
+			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
 			if (config == null) {
 				//Add and set default stuff
 				var gt = new GuildTask() { GuildId = ctx.Guild.Id,
@@ -195,7 +195,7 @@ namespace DateBot.Base {
 			else if (categoryType == "Secret Category")
 				info = "creating new secret rooms for dates";
 			else return;
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
+			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
 
 			DiscordChannel cat = null;
 
@@ -217,7 +217,7 @@ namespace DateBot.Base {
 				}, ctx.User.Id, deleteAnswer:true, deleteAnswerTimeout: TimeSpan.Zero, wrongAnswer:"I'm looking for a ulong Id of a category");
 
 
-			async Task SetMainTextChannelAsync(CommandContext ctx, GuildConfig config) {
+			async Task SetMainTextChannelAsync(CommandContext ctx, DateBotGuildConfig config) {
 				DiscordChannel channel = null;
 				await DialogFramework.CreateQuestion(ctx.Channel,
 					"Paste main text channel Id, where will happen all interaction with date activity.", 
@@ -241,7 +241,7 @@ namespace DateBot.Base {
 			else if (messageType == "Controls")
 				info = "conrolls during a date, setting likes or adding time";
 			else return;
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
+			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
 			ctx.Guild.Channels.TryGetValue(config.DateTextChannelId, out var channel);
 
 			await DialogFramework.CreateQuestion(ctx.Channel,
@@ -341,7 +341,7 @@ namespace DateBot.Base {
 			}
 		}
 		private async Task SetTimeout(CommandContext ctx) {
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as GuildConfig;
+			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
 
 			float time = default;
 

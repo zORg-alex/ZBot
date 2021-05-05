@@ -14,7 +14,7 @@ using Timer = System.Timers.Timer;
 
 namespace DateBot.Base {
 	[DataContract]
-	public partial class GuildTask : GuildConfig {
+	public partial class GuildTask : DateBotGuildConfig {
 
 		public DiscordGuild Guild { get; set; }
 		public DiscordChannel LogChannel { get; set; }

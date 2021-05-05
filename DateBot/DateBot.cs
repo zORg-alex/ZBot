@@ -41,7 +41,7 @@ namespace DateBot.Base {
 		}
 
 		/// <summary>
-		/// Serialize bot State. TODO make it run every minute?
+		/// Serialize bot State.
 		/// </summary>
 		/// <returns></returns>
 		public async Task SaveStates() {
