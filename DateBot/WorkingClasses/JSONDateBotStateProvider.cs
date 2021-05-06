@@ -1,26 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization;
-using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace DateBot.Base {
-	public interface IBotStateProvider{
-		List<IDateBotGuildTaskProvider> GuildTasks { get; }
-	}
-
 	/// <summary>
-	/// Should have [DataContract] attribute
+	/// This State Provider uses JSON to store/load state
 	/// </summary>
-	public interface IDateBotGuildTaskProvider {
-		ulong GuildId { get; }
-	}
-
-	public class JSONDateBotStateProvider : IBotStateProvider {
+	public class JSONDateBotStateProvider : IDateBotStateProvider {
 		public JSONDateBotStateProvider(string path) {
 			SaveLocation(path);
 		}
@@ -50,11 +39,7 @@ namespace DateBot.Base {
 		public async Task SaveAsync() {
 			try {
 				using (var sr = new StreamWriter(_savePath)) {
-					var jss = new JsonSerializerSettings() {
-						ContractResolver = new InterfaceContractResolver<IDateBotGuildTaskProvider>(),
-						Formatting = Formatting.Indented
-					};
-					await sr.WriteAsync(JsonConvert.SerializeObject(GuildTasks, jss));
+					await sr.WriteAsync(JsonConvert.SerializeObject(GuildStates, Formatting.Indented));
 				}
 			} catch (Exception e) { Console.WriteLine(e); }
 		}
@@ -65,24 +50,25 @@ namespace DateBot.Base {
 			if (File.Exists(_savePath)) {
 				//Deserealize bot last state
 				using (var sr = new StreamReader(_savePath)) {
-					GuildTasks = JsonConvert.DeserializeObject<List<JSONDateBotGuildTaskProvider>>(
+					GuildStates = JsonConvert.DeserializeObject<List<DateBotGuildState>>(
 						await sr.ReadToEndAsync()
-					).Select(j=>(IDateBotGuildTaskProvider)j).ToList();
+					).Select(s=>(IDateBotGuildState)s).ToList();
 				}
 			}
 			//If still null or wasn't read for some reason, instantiate new one
-			if (GuildTasks == null) {
+			if (GuildStates == null) {
 				Console.WriteLine("Bot State wasn't deserialized properly, instantiatin new. You may might have lost state file.");
-				GuildTasks = new List<IDateBotGuildTaskProvider>();
+				GuildStates = new List<IDateBotGuildState>();
 			}
 			Loaded = true;
 		}
-		public List<IDateBotGuildTaskProvider> GuildTasks { get; private set; }
-	}
+		public List<IDateBotGuildState> GuildStates { get; private set; }
 
-	public class JSONDateBotGuildTaskProvider : IDateBotGuildTaskProvider {
-		public ulong GuildId { get; set; }
-		public string GuildName = "Name that shouldn't be serialized";
-
+		public void AddGuildState(IDateBotGuildState state) {
+			GuildStates.Add(state);
+		}
+		public void RemoveGuildState(IDateBotGuildState state) {
+			GuildStates.Remove(state);
+		}
 	}
 }

@@ -15,11 +15,14 @@ namespace DateBot.Base {
 		/// <summary>
 		/// Serializable Bot State
 		/// </summary>
-		public BotStateConfig State { get; private set; }
+		public IDateBotStateProvider State { get; private set; }
 
-		public DateBot(Dictionary<string, string> args) :base(args) {
+		public List<DateBotGuildTask> GuildTasks { get; private set; } = new List<DateBotGuildTask>();
+
+		public DateBot(Dictionary<string, string> args, IDateBotStateProvider stateProvider) :base(args) {
 			if (Instance != null) throw new Exception("One DateBot already existing!");
 			Instance = this;
+			State = stateProvider;
 		}
 
 		/// <summary>
@@ -27,13 +30,20 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <param name="guildId"></param>
 		/// <returns></returns>
-		internal bool GuildRegistered(ulong guildId) => State.Guilds.Any(g => g.GuildId == guildId);
+		internal bool GuildRegistered(ulong guildId) => State.GuildStates.Any(g => g.GuildId == guildId);
 
-		internal void AddGuild(GuildTask config) {
-			State.Guilds.Add(config);
+		/// <summary>
+		/// Add new Guild to config and start new GuildTask
+		/// </summary>
+		/// <param name="config"></param>
+		internal void AddGuild(IDateBotGuildState config) {
+			State.GuildStates.Add(config);
+			var gt = new DateBotGuildTask(config);
+			GuildTasks.Add(gt);
+			_ = gt.Initialize();
 		}
 
-		internal GuildTask GetGuild(ulong guildId) => State.Guilds.FirstOrDefault(g => g.GuildId == guildId);
+		internal DateBotGuildTask GetGuildTask(ulong guildId) => GuildTasks.FirstOrDefault(g => g.Guild.Id == guildId);
 
 		public override void RegisterCommands() {
 			CommandsNext.RegisterCommands<DateBotCommands>();
@@ -45,12 +55,7 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <returns></returns>
 		public async Task SaveStates() {
-			try {
-				if (State != null)
-					using (var sr = new StreamWriter("botState.json")) {
-						await sr.WriteAsync(JsonConvert.SerializeObject(State, Formatting.Indented));
-					}
-			} catch (Exception e) { Console.WriteLine(e); }
+			await State.SaveAsync().ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -60,53 +65,31 @@ namespace DateBot.Base {
 		/// <returns></returns>
 		override public async Task ClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
 
-			if (!File.Exists("botState.json")) {
-				State = new BotStateConfig();
-			} else {
-				//Deserealize bot last state
-				using (var sr = new StreamReader("botState.json")) {
-					State = JsonConvert.DeserializeObject<BotStateConfig>(
-						await sr.ReadToEndAsync()
-					);
-					if (State == null) State = new BotStateConfig();
-				}
-			}
+			await State.LoadAsync().ConfigureAwait(false);
 
 			//Should I discard instead of await this one. If it get's stuck it won't function anywhere past this method
 #pragma warning disable CS1998
 			e.Client.GuildAvailable += async (e) => _ = InitGuildAsync(e.Guild).ConfigureAwait(false);
 #pragma warning restore CS1998
 
-			//foreach (var g in e.Client.Guilds) {
-			//	if (g.Value.Name == null)
-			//		e.Client.GuildAvailable += (z) => InitGuildAsync(z.Guild);
-			//	else
-			//		_ = InitGuildAsync(g.Value);
-			//}
-
 			Client.VoiceStateUpdated += Client_VoiceStateUpdated;
-			//Client.MessageReactionAdded += Client_MessageReactionAdded;
-			//Client.MessageReactionRemoved += Client_MessageReactionRemoved; ;
-
-			//????
-			//State.Guilds.ForEach(g => {
-			//	DiscordGuild guild;
-			//	Client.Guilds.TryGetValue(g.GuildId, out guild);
-			//	g.Guild = guild;
-			//});
 		}
 
 		/// <summary>
+		/// Add new Guild Task.
 		/// Pickup from where we left off, add all users in lobbies
 		/// </summary>
 		/// <param name="guild"></param>
 		/// <returns></returns>
 		private async Task InitGuildAsync(DiscordGuild guild) {
-			var gt = State.Guilds.FirstOrDefault(g => g.GuildId == guild.Id);
-			if (gt != null && !gt.Initialized && gt.InitTask == null) {
-				gt.InitTask = gt.Initialize(guild);
-				await gt.InitTask.ConfigureAwait(false);
+			var st = State.GuildStates.FirstOrDefault(g => g.GuildId == guild.Id);
+			if (st == null) {
+				st = new DateBotGuildState() { GuildId = guild.Id };
+				State.AddGuildState(st);
 			}
+			var gt = new DateBotGuildTask(st);
+			GuildTasks.Add(gt);
+			await gt.Initialize().ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -115,7 +98,7 @@ namespace DateBot.Base {
 		/// <param name="e"></param>
 		/// <returns></returns>
 		private async Task Client_VoiceStateUpdated(VoiceStateUpdateEventArgs e) {
-			var g = State.Guilds.FirstOrDefault(g => g.Guild.Id == e.Guild.Id);
+			var g = GetGuildTask(e.Guild.Id);
 			if (g!= null) {
 				await g.VoiceStateUpdated(e).ConfigureAwait(false);
 			}

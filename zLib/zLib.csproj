@@ -4,14 +4,16 @@
     <TargetFramework>netcoreapp3.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="OldStuff\**" />
+    <EmbeddedResource Remove="OldStuff\**" />
+    <None Remove="OldStuff\**" />
+  </ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="EPPlus" Version="4.5.3.2" />
 		<PackageReference Include="MongoDB.Bson" Version="2.9.2" />
 		<PackageReference Include="MongoDB.Driver" Version="2.9.2" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="OldStuff\" />
 	</ItemGroup>
 
 </Project>

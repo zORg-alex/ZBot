@@ -13,103 +13,22 @@ namespace DateBot.Base {
 	/// DateBot commands
 	/// </summary>
 	public class DateBotCommands : BaseCommandModule {
-		[Command("date-bot-config")]
-		public async Task ReadConfig(CommandContext ctx, string json) {
-			json = json.Replace("```", string.Empty);
-			var isNew = !DateBot.Instance.GuildRegistered(ctx.Guild.Id);
-
-			GuildTask config_ =
-				JsonConvert.DeserializeObject<GuildTask>(json);
-
-			if (config_.LogChannelId == 0)
-				config_.LogChannelId = ctx.Channel.Id;
-
-			if (isNew) {
-				DateBot.Instance.AddGuild(config_);
-
-				config_.Initialize(ctx.Guild).Wait();
-				await DateBot.Instance.SaveStates().ConfigureAwait(false);
-			} else {
-				var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
-
-				bool regenerateWelcomeMessage = false;
-				bool reinit = false;
-				var gt = ((GuildTask)config);
-				//TODO decide what level of initialization is necessary
-				if (config_.DateTextChannelId != default) {
-					reinit = config.DateTextChannelId != config_.DateTextChannelId;
-					config.DateTextChannelId = config_.DateTextChannelId;
-				}
-				if (config_.DateCategoryId != default) {
-					reinit = config.DateCategoryId != config_.DateCategoryId;
-					config.DateCategoryId = config_.DateCategoryId;
-				}
-				if (config_.DateSecretCategoryId != default) {
-					reinit = config.DateSecretCategoryId != config_.DateSecretCategoryId;
-					config.DateSecretCategoryId = config_.DateSecretCategoryId;
-				}
-				if (config_.MaleEmojiId != default) {
-					regenerateWelcomeMessage = config.MaleEmojiId != config_.MaleEmojiId;
-					config.MaleEmojiId = config_.MaleEmojiId;
-				}
-				if (config_.FemaleEmojiId != default) {
-					regenerateWelcomeMessage = config.FemaleEmojiId != config_.FemaleEmojiId;
-					config.FemaleEmojiId = config_.FemaleEmojiId;
-				}
-				if (config_.OptionEmojiIds.Count != default) {
-					regenerateWelcomeMessage = config.OptionEmojiIds != config_.OptionEmojiIds;
-					config.OptionEmojiIds = config_.OptionEmojiIds;
-				}
-				if (config_.LikeEmojiId != default) {
-					regenerateWelcomeMessage = config.LikeEmojiId != config_.LikeEmojiId;
-					config.LikeEmojiId = config_.LikeEmojiId;
-				}
-				if (config_.DisLikeEmojiId != default) {
-					regenerateWelcomeMessage = config.DisLikeEmojiId != config_.DisLikeEmojiId;
-					config.DisLikeEmojiId = config_.DisLikeEmojiId;
-				}
-				if (config_.TimeEmojiId != default) {
-					regenerateWelcomeMessage = config.TimeEmojiId != config_.TimeEmojiId;
-					config.TimeEmojiId = config_.TimeEmojiId;
-				}
-				if (config_.SecretRoomTime != default) {
-					gt.ChangeTimeout(config_.SecretRoomTime);
-				}
-				if (config_.WelcomeMessageBody != default && config.WelcomeMessageBody != config_.WelcomeMessageBody) {
-					config.WelcomeMessageBody = config_.WelcomeMessageBody;
-					await gt.WelcomeMessage.ModifyAsync(config.WelcomeMessageBody);
-				}
-				if (config_.WelcomeMessageId != default) config.WelcomeMessageId = config_.WelcomeMessageId;
-				if (config_.PrivateMessageBody != default && config.PrivateMessageBody != config_.PrivateMessageBody) {
-					config.PrivateMessageBody = config_.PrivateMessageBody;
-					await gt.PrivateControlsMessage.ModifyAsync(config.PrivateMessageBody);
-				}
-				if (config_.LogChannelId != default) config.LogChannelId = config_.LogChannelId;
-
-				if (reinit) await gt.Initialize(ctx.Guild).ConfigureAwait(false);
-				else if (regenerateWelcomeMessage) {
-					await gt.WelcomeMessageInit();
-					await gt.PrivateControlsMessageInit();
-				}
-			}
-		}
-
 		[Command("start")]
 		public async Task Start(CommandContext ctx) {
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
 			_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Started activity");
-			config.StartActivity();
+			gt.StartActivity();
 		}
 		[Command("stop")]
 		public async Task Stop(CommandContext ctx) {
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
 			_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Stopped activity");
-			config.StopActivity();
+			gt.StopActivity();
 		}
 		[Command("date-bot-adduser")]
 		[Aliases("adduser")]
 		public async Task AddUser(CommandContext ctx, ulong id, int gender, int age, params ulong[] likedIds) {
-			var gt = DateBot.Instance.State.Guilds.FirstOrDefault(g => g.GuildId == ctx.Guild.Id);
+			var gt = DateBot.Instance.State.GuildStates.FirstOrDefault(g => g.GuildId == ctx.Guild.Id);
 			gt.AllUserStates.TryGetValue(id, out var uState);
 			if (uState == null) {
 				uState = new UserState() { UserId = id, Gender = (GenderEnum)gender, AgeOptions = age, LikedUserIds = likedIds.ToList() };
@@ -125,10 +44,10 @@ namespace DateBot.Base {
 			//We need to set quite a few things in this menu, so it is broken down to smaller bits.
 			//Many menus are the same, except few words and where values go
 
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
+			var config = DateBot.Instance.GetGuildTask(ctx.Guild.Id).State;
 			if (config == null) {
 				//Add and set default stuff
-				var gt = new GuildTask() { GuildId = ctx.Guild.Id,
+				var gt = new DateBotGuildState() { GuildId = ctx.Guild.Id,
 					WelcomeMessageBody = $"Change this message to fit your audience",
 					MaleEmojiId = EmojiProvider.MaleSign,
 					FemaleEmojiId = EmojiProvider.FemaleSign,
@@ -179,8 +98,8 @@ namespace DateBot.Base {
 					_ = SetTimeout(ctx);
 				}),
 				new Answer(EmojiProvider.ArrowsClockwise,e=>{
-					var gt = DateBot.Instance.GetGuild(ctx.Guild.Id);
-					_ = gt.Initialize(ctx.Guild);
+					var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
+					_ = gt.Initialize();
 				}),
 				new Answer(EmojiProvider.CrossOnGreen,e=>{
 					DialogFramework.QuickVolatileMessage(ctx.Channel, "Thank you for interaction, bye.");
@@ -195,7 +114,7 @@ namespace DateBot.Base {
 			else if (categoryType == "Secret Category")
 				info = "creating new secret rooms for dates";
 			else return;
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
+			var config = DateBot.Instance.GetGuildTask(ctx.Guild.Id).State;
 
 			DiscordChannel cat = null;
 
@@ -217,7 +136,7 @@ namespace DateBot.Base {
 				}, ctx.User.Id, deleteAnswer:true, deleteAnswerTimeout: TimeSpan.Zero, wrongAnswer:"I'm looking for a ulong Id of a category");
 
 
-			async Task SetMainTextChannelAsync(CommandContext ctx, DateBotGuildConfig config) {
+			async Task SetMainTextChannelAsync(CommandContext ctx, IDateBotGuildState config) {
 				DiscordChannel channel = null;
 				await DialogFramework.CreateQuestion(ctx.Channel,
 					"Paste main text channel Id, where will happen all interaction with date activity.", 
@@ -241,7 +160,7 @@ namespace DateBot.Base {
 			else if (messageType == "Controls")
 				info = "conrolls during a date, setting likes or adding time";
 			else return;
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
+			var config = DateBot.Instance.GetGuildTask(ctx.Guild.Id).State;
 			ctx.Guild.Channels.TryGetValue(config.DateTextChannelId, out var channel);
 
 			await DialogFramework.CreateQuestion(ctx.Channel,
@@ -269,7 +188,7 @@ namespace DateBot.Base {
 			_ = MainMenu(ctx);
 		}
 		private async Task SetEmoji(CommandContext ctx) {
-			var gt = DateBot.Instance.GetGuild(ctx.Guild.Id);
+			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id).State;
 
 			await DialogFramework.CreateQuestion(ctx.Channel,
 				$"Choose what Emoji to set\n" +
@@ -341,7 +260,7 @@ namespace DateBot.Base {
 			}
 		}
 		private async Task SetTimeout(CommandContext ctx) {
-			var config = DateBot.Instance.GetGuild(ctx.Guild.Id) as DateBotGuildConfig;
+			var config = DateBot.Instance.GetGuildTask(ctx.Guild.Id).State;
 
 			float time = default;
 

@@ -92,8 +92,6 @@ namespace ZBot {
 			await ClientReadyAsync(e);
 		}
 
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-		public virtual async Task ClientReadyAsync(ReadyEventArgs e) {}
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+		public virtual Task ClientReadyAsync(ReadyEventArgs e) { return Task.CompletedTask; }
 	}
 }
