@@ -120,5 +120,19 @@ namespace DateBot.Base {
 			set { _optionEmojis = value; }
 		}
 
+		private DiscordRole _maleRole;
+
+		public DiscordRole MaleRole {
+			get { return _maleRole; }
+			set { _maleRole = value; }
+		}
+
+		private DiscordRole _femaleRole;
+
+		public DiscordRole FemaleRole {
+			get { return _femaleRole; }
+			set { _femaleRole = value; }
+		}
+
 	}
 }

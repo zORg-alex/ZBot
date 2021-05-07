@@ -2,9 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using Emzi0767.Utilities;
 using zLib;
 
 namespace ZBot.DialogFramework {
@@ -12,176 +15,6 @@ namespace ZBot.DialogFramework {
 		public static TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(30);
 		public static TimeSpan DefaultTimeoutBeforeDelete { get; set; } = TimeSpan.FromSeconds(3);
 		public static TimeSpan DefaultDeleteAnswerTimeout { get; set; } = TimeSpan.FromSeconds(3);
-
-		/// <summary>
-		/// Will create a message on a given channel, or will find an existing in case of restoring a previous session,
-		/// apply answer emojis and subscribe to emojis and text answers
-		/// </summary>
-		/// <param name="channel">A <see cref="DiscordChannel"/> where message should be</param>
-		/// <param name="messageBody">A body of this message</param>
-		/// <param name="answers">List of structs containing answers in form of emojis to click or written answers with callbacks</param>
-		/// <param name="UserId">In case one user should answer this question</param>
-		/// <param name="timeout">This message will be terminated after timeout</param>
-		/// <param name="behaviour">What to do after timeout</param>
-		/// <param name="existingMessageId">If there is a message already to subscribe to</param>
-		/// <param name="deleteAnswer">Delete reaction rightaway for anonymosity or to use it as a button</param>
-		/// <param name="waitForMultipleAnswers">If <see langword="false"/> it will unsubscribe after getting first answer</param>
-		/// <returns></returns>
-		public static async Task CreateMessage(DiscordChannel channel, string messageBody,
-			IEnumerable<Answer> answers, ulong? UserId = null, MessageBehavior behaviour = MessageBehavior.Volatile,
-			TimeSpan? timeout = null, string timeoutMessage = "Timed out", bool showTimeoutMessage = true,
-			TimeSpan? timeoutBeforeDelete = null, string wrongAnswer = "This isn't what I'm looking for. Acceptable keywords are: {0}",
-			DiscordMessage existingMessage = null, bool deleteAnswer = false, TimeSpan? deleteAnswerTimeout = null, bool waitForMultipleAnswers = false) {
-
-
-			SetDefaultValuesForTimeouts(ref timeout, ref timeoutBeforeDelete, ref deleteAnswerTimeout);
-
-			//Find or create a message even if missing
-			DiscordMessage DMessage = await GetOrCreateMessage(channel, messageBody, existingMessage).ConfigureAwait(false);
-			
-			await SetReactions(DMessage, answers.Where(a=>a.Emoji != null),true).ConfigureAwait(false);
-
-			bool answered = false;
-			bool unsubscribed = false;
-			//Should this do? It's ether suppress CS1998 or do this. Unless this will have some unpredictable result. Anyway, this Task should be .ConfigureAwait(false) 
-			Func<Task> unsubscribeAndDismiss = async () => { await Task.Yield(); };
-			PausableTimer timeoutTimer = new PausableTimer(timeout.Value.TotalMilliseconds);
-			timeoutTimer.AutoReset = false;
-
-			//Some optimizations
-			var answersFromTokens = answers.SelectMany(a=>a.StringTokens.Select(t=>(Answer:a,Token:t))).ToArray();
-			var answersFromEmojiIds = answers.ToDictionary(a=>a.Emoji);
-
-			if (answers.Count() > 0) {
-				var reactionAdded = new DSharpPlus.AsyncEventHandler<DSharpPlus.EventArgs.MessageReactionAddEventArgs>(async (e) => {
-					//Ignore own reactions and other messages
-					if (e.User.IsCurrent || e.Message.Id != DMessage.Id) return;
-					//TODO Findout what if it didn't find? Or use foreach, like in messages
-					if (deleteAnswer)
-						await ((Func<Task>)(async () => {
-							await Task.Delay((int)deleteAnswerTimeout.Value.TotalMilliseconds);
-							await e.Message.DeleteReactionAsync(e.Emoji, e.User);
-						}))().ConfigureAwait(false);
-
-					if (answersFromEmojiIds.ContainsKey(e.Emoji)) {
-
-						var answer = answersFromEmojiIds[e.Emoji];
-
-						timeoutTimer.Pause();
-
-						//Do we need to check if there is another answer set already, just in case of hickup
-						//TODO It's a reaction answer. Shouldn't it be true by default?
-						answered = true;
-						_ = answer.InvokeFromEmoji(e.User, DMessage);
-					}
-
-					if (!waitForMultipleAnswers && answered) {
-						timeoutTimer.Stop();
-						timeoutTimer.Dispose();
-						await unsubscribeAndDismiss().ConfigureAwait(false);
-						return;
-					} else
-						timeoutTimer.Release();
-				});
-				var messageAdded = new DSharpPlus.AsyncEventHandler<DSharpPlus.EventArgs.MessageCreateEventArgs>(async e => {
-					//Ignore other channels and other users activity
-					if (e.Channel.Id != DMessage.ChannelId || e.Author.IsCurrent || UserId.HasValue ? e.Author.Id != UserId.Value : false) return;
-
-					//Get list of all tokens ans Answer objects
-					foreach (var pair in answersFromTokens) {
-						if (e.Message.Content.ToLower().Contains(pair.Token)) {
-
-							timeoutTimer.Pause();
-							//???Do we really need to get answer value if we already found a token?
-							answered = pair.Answer.ValidateAnswer(e.Message.Content);
-							_ = pair.Answer.InvokeFromMessage(e.Message, DMessage);
-							if (deleteAnswer)
-								//Doing it afterwards is simpler
-								await e.Message.DeleteAsync().ConfigureAwait(false);
-
-							//what to do if answer wasn't accepted? should be handled internally? Quick response
-
-							if (!waitForMultipleAnswers && answered) {
-								timeoutTimer.Stop();
-								timeoutTimer.Dispose();
-								await unsubscribeAndDismiss().ConfigureAwait(false);
-								return;
-							} else
-								timeoutTimer.Release();
-						}
-					}
-					//Seems like answer wasn't recognised. Should it have an event to expire? Or make a new method for that?
-
-					await QuickVolatileMessage(channel, string.Format(wrongAnswer,
-						string.Join(", ", answers.Where(a => a.StringTokens.Length > 0).SelectMany(a => a.StringTokens))),
-						TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-				});
-				unsubscribeAndDismiss = async () => {
-					//Should we also empty this action? This one will be ready to be collected...
-					if (unsubscribed) return;
-					if (behaviour == MessageBehavior.Volatile || behaviour == MessageBehavior.KeepMessageAfterTimeout) {
-						//unsubscribe later//TODO Check whether it actually works
-						if (answers.Any(a => a.Emoji != null))
-							Bot.Instance.Client.MessageReactionAdded -= reactionAdded;
-						if (answers.Any(answers => answers.StringTokens.Length > 0))
-							Bot.Instance.Client.MessageCreated -= messageAdded;
-					}
-					if (behaviour == MessageBehavior.Volatile) {
-						//Should pause here
-						await Task.Delay((int)timeoutBeforeDelete.Value.TotalMilliseconds);
-						await DMessage.DeleteAsync().ConfigureAwait(false);
-					} else if (behaviour == MessageBehavior.KeepMessageAfterTimeout) {
-						//TODO should we delete only bots reactions?
-						await DMessage.DeleteAllReactionsAsync();
-					}
-				};
-				//Subscribe to reactions and answers
-
-				if (answers.Any(a=>a.Emoji != null))
-					Bot.Instance.Client.MessageReactionAdded += reactionAdded;
-				if (answers.Any(answers=>answers.StringTokens.Length > 0))
-					Bot.Instance.Client.MessageCreated += messageAdded;
-			}
-			timeoutTimer.Start();
-
-			timeoutTimer.Elapsed += async (s, e) => {
-				//Do we need to dispose it? Or just leave it?
-				//In case of permanent behavior it will just skip and won't unsubscribe, just what we need
-				timeoutTimer.Stop();
-				if (behaviour != MessageBehavior.Permanent && !answered) {
-					await unsubscribeAndDismiss().ConfigureAwait(false);
-					//Timeout message
-					if (!answered && showTimeoutMessage) {
-						await QuickVolatileMessage(channel, timeoutMessage, TimeSpan.FromSeconds(3)).ConfigureAwait(false);
-					}
-				}
-			};
-		}
-
-		/// <summary>
-		/// Will create a message on a given channel, or will find an existing in case of restoring a previous session,
-		/// and subscribe to any text answers that will follow until timeout.
-		/// </summary>
-		/// <param name="channel">A <see cref="DiscordChannel"/> where message should be</param>
-		/// <param name="messageBody">A body of this message</param>
-		/// <param name="onAnyAnswer">callback fired on any text answer</param>
-		/// <param name="UserId">In case one user should answer this question</param>
-		/// <param name="timeout">This message will be terminated after timeout</param>
-		/// <param name="behaviour">What to do after timeout</param>
-		/// <param name="existingMessageId">If there is a message already to subscribe to</param>
-		/// <param name="deleteAnswer">Delete reaction rightaway for anonymosity or to use it as a button</param>
-		/// <param name="waitForMultipleAnswers">If <see langword="false"/> it will unsubscribe after getting first answer</param>
-		/// <returns></returns>
-		public static async Task CreateMessage(DiscordChannel channel, string messageBody,
-			Func<string, bool> validateAnswer, Func<Answer.AnswerArgs, Task> onAnyAnswer, ulong? UserId = null, MessageBehavior behaviour = MessageBehavior.Volatile,
-			TimeSpan? timeout = null, string timeoutMessage = "Timed out", bool showTimeoutMessage = true,
-			TimeSpan? timeoutBeforeDelete = null, string wrongAnswer = "This isn't what I'm looking for. Acceptable keywords are: {0}",
-			DiscordMessage existingMessage = null, bool deleteAnswer = false, TimeSpan? deleteAnswerTimeout = null, bool waitForMultipleAnswers = false) =>
-
-			await CreateMessage(channel, messageBody, new Answer[] { 
-					new Answer(null, new string[] { "" }, validateAnswer, onAnyAnswer) },
-				UserId, behaviour, timeout, timeoutMessage, showTimeoutMessage, timeoutBeforeDelete,
-				wrongAnswer, existingMessage, deleteAnswer, deleteAnswerTimeout, waitForMultipleAnswers);
 
 		private static async Task SetReactions(DiscordMessage message, IEnumerable<Answer> answers, bool processOld = false, bool deleteOld = true) {
 			var existingReactions = message.Reactions;
@@ -244,7 +77,8 @@ namespace ZBot.DialogFramework {
 			ulong? UserId = null, MessageBehavior behavior = MessageBehavior.Volatile,
 			TimeSpan? timeout = null, string timeoutMessage = "Timeout", bool showTimeoutMessage = true,
 			TimeSpan? timeoutBeforeDelete = null, string wrongAnswer = "This isn't what I'm looking for.",
-			DiscordMessage existingMessage = null, bool deleteAnswer = false, TimeSpan? deleteAnswerTimeout = null, bool waitForMultipleAnswers = false) {
+			DiscordMessage existingMessage = null, bool deleteAnswer = false, TimeSpan? deleteAnswerTimeout = null,
+			bool waitForMultipleAnswers = false) {
 
 			SetDefaultValuesForTimeouts(ref timeout, ref timeoutBeforeDelete, ref deleteAnswerTimeout);
 			DiscordMessage Question = await GetOrCreateMessage(channel, messageBody, existingMessage).ConfigureAwait(false);
@@ -279,6 +113,10 @@ namespace ZBot.DialogFramework {
 			if (answersFromTokens.Count() > 0)
 				Bot.Instance.Client.MessageCreated += MessageAdded;
 			Bot.Instance.Client.MessageDeleted += OnDeleted;
+
+
+			//cancellationToken.Register(UnsubscribeAndDismiss().Wait);
+
 			//Do I need to even start it in case of Permanent behavior?
 			timeoutTimer.Start();
 
@@ -291,7 +129,7 @@ namespace ZBot.DialogFramework {
 			return Question;
 
 
-			async Task ReactionAdded(MessageReactionAddEventArgs e) {
+			async Task ReactionAdded(DiscordClient c, MessageReactionAddEventArgs e) {
 				//Ignore own reactions and other messages
 				if (e.User.IsCurrent || e.Message.Id != Question.Id) return;
 
@@ -321,7 +159,7 @@ namespace ZBot.DialogFramework {
 					timeoutTimer.Release();
 			}
 
-			async Task MessageAdded(MessageCreateEventArgs e) {
+			async Task MessageAdded(DiscordClient c, MessageCreateEventArgs e) {
 				//Ignore other channels and other users activity
 				if (e.Channel.Id != Question.ChannelId || e.Author.IsCurrent || UserId.HasValue ? e.Author.Id != UserId.Value : false) return;
 
@@ -372,7 +210,7 @@ namespace ZBot.DialogFramework {
 				}
 			}
 
-			Task OnDeleted(MessageDeleteEventArgs e) {
+			Task OnDeleted(DiscordClient c, MessageDeleteEventArgs e) {
 				if (e.Message.Id != Question.Id)
 					return Task.CompletedTask;
 				unsubscribed = true;
@@ -405,7 +243,8 @@ namespace ZBot.DialogFramework {
 			ulong? UserId = null, MessageBehavior behavior = MessageBehavior.Volatile,
 			TimeSpan? timeout = null, string timeoutMessage = "Timeout", bool showTimeoutMessage = true,
 			TimeSpan? timeoutBeforeDelete = null, string wrongAnswer = "This isn't what I'm looking for.",
-			DiscordMessage existingMessage = null, bool deleteAnswer = false, TimeSpan? deleteAnswerTimeout = null, bool waitForMultipleAnswers = false) {
+			DiscordMessage existingMessage = null, bool deleteAnswer = false, TimeSpan? deleteAnswerTimeout = null,
+			bool waitForMultipleAnswers = false) {
 
 			SetDefaultValuesForTimeouts(ref timeout, ref timeoutBeforeDelete, ref deleteAnswerTimeout);
 			DiscordMessage Question = await GetOrCreateMessage(channel, messageBody, existingMessage).ConfigureAwait(false);
@@ -431,6 +270,8 @@ namespace ZBot.DialogFramework {
 
 			Bot.Instance.Client.MessageCreated += MessageAdded;
 			Bot.Instance.Client.MessageDeleted += OnDeleted;
+
+			//cancellationToken.Register(UnsubscribeAndDismiss().Wait);
 			//Do I need to even start it in case of Permanent behavior?
 			timeoutTimer.Start();
 
@@ -440,7 +281,7 @@ namespace ZBot.DialogFramework {
 				await Task.Delay(100);
 			}
 
-			Task MessageAdded(MessageCreateEventArgs e) {
+			Task MessageAdded(DiscordClient c, MessageCreateEventArgs e) {
 
 				//Ignore other channels and other users activity
 				if (e.Channel.Id != Question.ChannelId || e.Author.IsCurrent || UserId.HasValue ? e.Author.Id != UserId.Value : false)
@@ -479,7 +320,7 @@ namespace ZBot.DialogFramework {
 					await Question.DeleteAsync().ConfigureAwait(false);
 				}
 			}
-			Task OnDeleted(MessageDeleteEventArgs e) {
+			Task OnDeleted(DiscordClient c, MessageDeleteEventArgs e) {
 				if (e.Message.Id != Question.Id)
 					return Task.CompletedTask;
 				unsubscribed = true;

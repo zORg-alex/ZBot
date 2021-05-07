@@ -36,11 +36,11 @@ namespace DateBot.Base {
 		/// Add new Guild to config and start new GuildTask
 		/// </summary>
 		/// <param name="config"></param>
-		internal void AddGuild(IDateBotGuildState config) {
+		internal void AddGuild(DiscordClient client, IDateBotGuildState config) {
 			State.GuildStates.Add(config);
 			var gt = new DateBotGuildTask(config);
 			GuildTasks.Add(gt);
-			_ = gt.Initialize();
+			_ = gt.Initialize(client);
 		}
 
 		internal DateBotGuildTask GetGuildTask(ulong guildId) => GuildTasks.FirstOrDefault(g => g.Guild.Id == guildId);
@@ -63,13 +63,13 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <param name="e"></param>
 		/// <returns></returns>
-		override public async Task ClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
+		override public async Task ClientReadyAsync(DiscordClient c, DSharpPlus.EventArgs.ReadyEventArgs e) {
 
 			await State.LoadAsync().ConfigureAwait(false);
 
 			//Should I discard instead of await this one. If it get's stuck it won't function anywhere past this method
 #pragma warning disable CS1998
-			e.Client.GuildAvailable += async (e) => _ = InitGuildAsync(e.Guild).ConfigureAwait(false);
+			c.GuildAvailable += async (c, e) => _ = InitGuildAsync(c, e.Guild).ConfigureAwait(false);
 #pragma warning restore CS1998
 
 			Client.VoiceStateUpdated += Client_VoiceStateUpdated;
@@ -81,7 +81,7 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <param name="guild"></param>
 		/// <returns></returns>
-		private async Task InitGuildAsync(DiscordGuild guild) {
+		private async Task InitGuildAsync(DiscordClient c, DiscordGuild guild) {
 			var st = State.GuildStates.FirstOrDefault(g => g.GuildId == guild.Id);
 			if (st == null) {
 				st = new DateBotGuildState() { GuildId = guild.Id };
@@ -89,7 +89,7 @@ namespace DateBot.Base {
 			}
 			var gt = new DateBotGuildTask(st);
 			GuildTasks.Add(gt);
-			await gt.Initialize().ConfigureAwait(false);
+			await gt.Initialize(c).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -97,7 +97,7 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <param name="e"></param>
 		/// <returns></returns>
-		private async Task Client_VoiceStateUpdated(VoiceStateUpdateEventArgs e) {
+		private async Task Client_VoiceStateUpdated(DiscordClient c, VoiceStateUpdateEventArgs e) {
 			var g = GetGuildTask(e.Guild.Id);
 			if (g!= null) {
 				await g.VoiceStateUpdated(e).ConfigureAwait(false);

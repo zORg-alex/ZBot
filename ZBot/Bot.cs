@@ -25,7 +25,7 @@ namespace ZBot {
 		public InteractivityExtension InteractivityConfiguration { get; protected set; }
 		public Voice​Next​Extension Voice​Next​Configuration { get; protected set; }
 
-		public Bot(Dictionary<string, string> args, bool useInteractivity = false, int interactivityTimeout = 30000, bool useVoiceNext = false) {
+		public Bot(Dictionary<string, string> args, int interactivityTimeout = 30000, bool useVoiceNext = false) {
 			if (Instance != null)
 				throw new InvalidOperationException("Instance is already running");
 			Instance = this;
@@ -36,13 +36,13 @@ namespace ZBot {
 					conf = new BotConfig() { Token = args["token"], Prefix = args["prefix"] };
 			} catch { throw new ArgumentException("Couldn't find token and prefix arguements"); }
 
-			ConfigBotAsync(conf, useInteractivity, interactivityTimeout, useVoiceNext).ConfigureAwait(false);
+			ConfigBotAsync(conf, interactivityTimeout, useVoiceNext).ConfigureAwait(false);
 		}
 		/// <summary>
 		/// Initializes the bot Asynchronously
 		/// </summary>
 		/// <returns></returns>
-		public async Task ConfigBotAsync(BotConfig connectionConfig = null, bool useInteractivity = false, int interactivityTimeout = 30000, bool useVoiceNext = false) {
+		public async Task ConfigBotAsync(BotConfig connectionConfig = null, int interactivityTimeout = 30000, bool useVoiceNext = false) {
 			//Read bot connection config
 			if (connectionConfig == null) connectionConfig = JsonConvert.DeserializeObject<BotConfig>(
 				await new StreamReader("config.json").ReadToEndAsync()
@@ -63,12 +63,6 @@ namespace ZBot {
 					EnableDms = true
 				});
 
-			if (useInteractivity)
-				InteractivityConfiguration = Client.UseInteractivity(
-					new InteractivityConfiguration {
-						Timeout = TimeSpan.FromSeconds(30)
-					});
-
 			if (useVoiceNext)
 				Voice​Next​Configuration = Client.UseVoiceNext();
 
@@ -84,14 +78,14 @@ namespace ZBot {
 		/// </summary>
 		/// <param name="e"></param>
 		/// <returns></returns>
-		private async Task OnClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
+		private async Task OnClientReadyAsync(DiscordClient c, DSharpPlus.EventArgs.ReadyEventArgs e) {
 
 			BotId = Client.CurrentUser.Id;
 			BotUser = Client.CurrentUser;
 
-			await ClientReadyAsync(e);
+			await ClientReadyAsync(c, e);
 		}
 
-		public virtual Task ClientReadyAsync(ReadyEventArgs e) { return Task.CompletedTask; }
+		public virtual Task ClientReadyAsync(DiscordClient c, ReadyEventArgs e) { return Task.CompletedTask; }
 	}
 }

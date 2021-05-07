@@ -31,7 +31,7 @@ namespace DateBot.Base.Match {
 			LastMatches = lastMatches;
 		}
 
-		internal float MatchedRecently(MatchUser b) => Array.IndexOf(LastMatches, b) * -1f;
+		internal float MatchedRecently(MatchUser b) => Array.IndexOf(LastMatches, b) * -2f;
 
 		internal bool Liked(MatchUser a) => Likes.Contains(a.Id);
 		internal bool Disliked(MatchUser a) => Dislikes.Contains(a.Id);

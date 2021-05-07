@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Linq;
 using System.Security.Policy;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using Newtonsoft.Json;
+using ZBot;
 using ZBot.DialogFramework;
 
 namespace DateBot.Base {
@@ -17,12 +19,14 @@ namespace DateBot.Base {
 		public async Task Start(CommandContext ctx) {
 			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
 			_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Started activity");
+			_ = ctx.Message.DeleteAsync();
 			gt.StartActivity();
 		}
 		[Command("stop")]
 		public async Task Stop(CommandContext ctx) {
 			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
 			_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Stopped activity");
+			_ = ctx.Message.DeleteAsync();
 			gt.StopActivity();
 		}
 		[Command("date-bot-adduser")]
@@ -59,7 +63,7 @@ namespace DateBot.Base {
 					TimeEmojiId = EmojiProvider.Timer
 				};
 
-				DateBot.Instance.AddGuild(gt);
+				DateBot.Instance.AddGuild(ctx.Client, gt);
 			}
 
 			await ctx.Message.DeleteAsync().ConfigureAwait(false);
@@ -99,14 +103,53 @@ namespace DateBot.Base {
 				}),
 				new Answer(EmojiProvider.ArrowsClockwise,e=>{
 					var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
-					_ = gt.Initialize();
+					_ = gt.Initialize(ctx.Client);
 				}),
 				new Answer(EmojiProvider.CrossOnGreen,e=>{
 					DialogFramework.QuickVolatileMessage(ctx.Channel, "Thank you for interaction, bye.");
+				}),
+				new Answer(EmojiProvider.Zero, e=>{
+					_ = GiveRolesAsync(ctx);
 				})
 				}, ctx.User.Id, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero,
 				timeoutMessage:"Thank you for interaction, bye.").ConfigureAwait(false);
 		}
+
+		private async Task GiveRolesAsync(CommandContext ctx) {
+			await DialogFramework.CreateQuestion(ctx.Channel,
+				$"Do you wish to assign roles on applying gender?", new Answer[] {
+				new Answer(EmojiProvider.MaleSign, e=>{
+					_ = SetRoleFor(ctx, true);
+				}),new Answer(EmojiProvider.FemaleSign, e=>{
+					_ = SetRoleFor(ctx, false);
+				}),new Answer(EmojiProvider.CrossOnGreen, e=>{
+				_ = MainMenu(ctx);
+				})}, ctx.User.Id, deleteAnswer:true, deleteAnswerTimeout: TimeSpan.Zero).ConfigureAwait(false);
+		}
+
+		private async Task SetRoleFor(CommandContext ctx, bool boys) {
+			string info = $"Mention role you want to assign to {(boys ? "Boys" : "Girls")}.";
+
+			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id).State;
+			ulong roleId = 0;
+
+			await DialogFramework.CreateQuestion(ctx.Channel, info, message => {
+				var role = Regex.Match(message, @"<@&(\d+)>").Value;
+				if (ulong.TryParse(role.Substring(3, role.Length - 4), out roleId))
+					if (ctx.Guild.GetRole(roleId) is DiscordRole) {
+						return true;
+					}
+				return false;
+			}, e => {
+				if (boys)
+					gt.MaleRoleId = roleId;
+				else
+					gt.FemaleRoleId = roleId;
+				_ = GiveRolesAsync(ctx);
+				return Task.CompletedTask;
+			}, ctx.User.Id, deleteAnswer: true, deleteAnswerTimeout: TimeSpan.Zero).ConfigureAwait(false);
+		}
+
 		private async Task SetCategory(CommandContext ctx, string categoryType) {
 			string info = "";
 			if (categoryType == "Date Category")
@@ -139,7 +182,7 @@ namespace DateBot.Base {
 			async Task SetMainTextChannelAsync(CommandContext ctx, IDateBotGuildState config) {
 				DiscordChannel channel = null;
 				await DialogFramework.CreateQuestion(ctx.Channel,
-					"Paste main text channel Id, where will happen all interaction with date activity.", 
+					"Paste main text channel Id, where will happen all interaction with date activity.",
 					message => {
 						ulong.TryParse(message, out var id);
 						return ctx.Guild.Channels.TryGetValue(id, out channel);
@@ -220,34 +263,33 @@ namespace DateBot.Base {
 					//Seems like we get unicode here from message.Content, not name. Had some problems with it
 					if (emojiType == "Options") {
 						var split = message.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
-						return split.All(m => DiscordEmoji.FromUnicode(DateBot.Instance.Client, m) != null);
+						return split.All(m => Emoji.TryGetEmojiFromText(DateBot.Instance.Client, m, out var emoji));
 					} else 
-						return DiscordEmoji.FromUnicode(DateBot.Instance.Client, message) is DiscordEmoji;
-					
-
+						return Emoji.TryGetEmojiFromText(DateBot.Instance.Client, message, out var emoji);
 				}, e => {
+					if (emojiType == "Options") {
+						gt.OptionEmojiIds = e.Message.Content.Split(' ', System.StringSplitOptions.RemoveEmptyEntries).
+						Select(u => Emoji.GetEmojiFromText(DateBot.Instance.Client, u).ToString()).ToList();
+					}
+					Emoji.TryGetEmojiFromText(DateBot.Instance.Client, e.Message.Content, out var emoji);
 					switch (emojiType) {
 						case "Male":
-							gt.MaleEmojiId = DiscordEmoji.FromUnicode(DateBot.Instance.Client, e.Message.Content).GetDiscordName();
+							gt.MaleEmojiId = emoji.ToString();
 							break;
 						case "Female":
-							gt.FemaleEmojiId = DiscordEmoji.FromUnicode(DateBot.Instance.Client, e.Message.Content).GetDiscordName();
+							gt.FemaleEmojiId = emoji.ToString();
 							break;
 						case "Like":
-							gt.LikeEmojiId = DiscordEmoji.FromUnicode(DateBot.Instance.Client, e.Message.Content).GetDiscordName();
+							gt.LikeEmojiId = emoji.ToString();
 							break;
 						case "Cancel Like":
-							gt.CancelLikeEmojiId = DiscordEmoji.FromUnicode(DateBot.Instance.Client, e.Message.Content).GetDiscordName();
+							gt.CancelLikeEmojiId = emoji.ToString();
 							break;
 						case "Dislike":
-							gt.DisLikeEmojiId = DiscordEmoji.FromUnicode(DateBot.Instance.Client, e.Message.Content).GetDiscordName();
+							gt.DisLikeEmojiId = emoji.ToString();
 							break;
 						case "Time":
-							gt.TimeEmojiId = DiscordEmoji.FromUnicode(DateBot.Instance.Client, e.Message.Content).GetDiscordName();
-							break;
-						case "Options":
-							gt.OptionEmojiIds = e.Message.Content.Split(' ', System.StringSplitOptions.RemoveEmptyEntries).
-							Select(u=> DiscordEmoji.FromUnicode(DateBot.Instance.Client,u).GetDiscordName()).ToList();
+							gt.TimeEmojiId = emoji.ToString();
 							break;
 						default:
 							break;

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using Newtonsoft.Json;
 using ZBot;
@@ -56,7 +57,7 @@ namespace DummyBot.ConsoleApp {
 		/// </summary>
 		/// <param name="e"></param>
 		/// <returns></returns>
-		override public async Task ClientReadyAsync(DSharpPlus.EventArgs.ReadyEventArgs e) {
+		override public async Task ClientReadyAsync(DiscordClient c, DSharpPlus.EventArgs.ReadyEventArgs e) {
 
 			if (!File.Exists("botState.json")) {
 				State = new BotStateConfig();
@@ -72,16 +73,8 @@ namespace DummyBot.ConsoleApp {
 
 			//Should I discard instead of await this one. If it get's stuck it won't function anywhere past this method
 #pragma warning disable CS1998
-			e.Client.GuildAvailable += async (e) => _ = InitGuildAsync(e.Guild).ConfigureAwait(false);
+			c.GuildAvailable += async (c, e) => _ = InitGuildAsync(e.Guild).ConfigureAwait(false);
 #pragma warning restore CS1998
-
-			//This is logically wrong. Seems I've overthought this one
-			//foreach (var g in e.Client.Guilds) {
-			//	if (g.Value.Name == null)
-			//		e.Client.GuildAvailable += async (z) => await InitGuildAsync(z.Guild).ConfigureAwait(false);
-			//	else
-			//		await InitGuildAsync(g.Value).ConfigureAwait(false);
-			//}
 		}
 
 		public override void RegisterCommands() {

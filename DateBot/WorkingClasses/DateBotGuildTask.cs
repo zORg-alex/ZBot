@@ -7,6 +7,7 @@ using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using ZBot.DialogFramework;
 using DateBot.Base.Match;
+using ZBot;
 
 namespace DateBot.Base {
 	/// <summary>
@@ -37,21 +38,24 @@ namespace DateBot.Base {
 		/// Start initialization
 		/// </summary>
 		/// <returns></returns>
-		public async Task Initialize() {
+		public async Task Initialize(DiscordClient c) {
 			//Cancel if is initializing
 			if (InitTask != null) { return; }
 
-			InitTask = _initialize();
+			InitTask = _initialize(c);
 			await InitTask.ContinueWith(t => { 
 				InitTask = null;
 			}).ConfigureAwait(false);
 		}
 
-		private async Task _initialize() {
-			var client = DateBot.Instance.Client;
-			client.Guilds.TryGetValue(State.GuildId, out _guild);
+		private async Task _initialize(DiscordClient c) {
+			c.Guilds.TryGetValue(State.GuildId, out _guild);
 			Guild = _guild;
 
+			if (State.MaleRoleId != 0)
+				MaleRole = Guild.GetRole(State.MaleRoleId);
+			if (State.FemaleRoleId != 0)
+				FemaleRole = Guild.GetRole(State.FemaleRoleId);
 
 			SecretRoomOverwriteBuilder = new DiscordOverwriteBuilder();
 			SecretRoomOverwriteBuilder.For(Guild.EveryoneRole);
@@ -78,14 +82,14 @@ namespace DateBot.Base {
 			if (DateVoiceLobbies.Count == 0 || DateVoiceLobbies.All(c => c.Users.Count() > 0)) await AddLastEmptyVoiceLobby().ConfigureAwait(false);
 
 			//GetEmojis
-			MaleEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, State.MaleEmojiId);
-			FemaleEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, State.FemaleEmojiId);
+			MaleEmoji = Emoji.GetEmojiFromText(DateBot.Instance.Client, State.MaleEmojiId);
+			FemaleEmoji = Emoji.GetEmojiFromText(DateBot.Instance.Client, State.FemaleEmojiId);
 			OptionEmojis.Clear();
-			OptionEmojis.AddRange(State.OptionEmojiIds.Select(id => DiscordEmoji.FromUnicode(DateBot.Instance.Client, id)));
-			LikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, State.LikeEmojiId);
-			DislikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, State.DisLikeEmojiId);
-			TimeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, State.TimeEmojiId);
-			CancelLikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, State.CancelLikeEmojiId);
+			OptionEmojis.AddRange(State.OptionEmojiIds.Select(id => Emoji.GetEmojiFromText(DateBot.Instance.Client, id)));
+			LikeEmoji = Emoji.GetEmojiFromText(DateBot.Instance.Client, State.LikeEmojiId);
+			DislikeEmoji = Emoji.GetEmojiFromText(DateBot.Instance.Client, State.DisLikeEmojiId);
+			TimeEmoji = Emoji.GetEmojiFromText(DateBot.Instance.Client, State.TimeEmojiId);
+			CancelLikeEmoji = Emoji.GetEmojiFromText(DateBot.Instance.Client, State.CancelLikeEmojiId);
 
 			//Check and add users in lobbies
 			foreach (var u in UsersInLobbies.ToArray()) {
@@ -105,6 +109,7 @@ namespace DateBot.Base {
 		/// </summary>
 		/// <returns></returns>
 		public async Task WelcomeMessageInit() {
+			//What to do with previously created question, that still is monitoring answers?
 			var existingWelcomeMessage = DateTextChannel.GetMessageAsync(State.WelcomeMessageId);
 			//TODO Would be nice to have an override for one action with many emojis, passing emoji in for simplicity
 			var answers = new Answer[2 + OptionEmojis.Count()];
@@ -114,11 +119,25 @@ namespace DateBot.Base {
 				UserState uState = AddOrGetUserState(e.User);
 				uState.Gender = GenderEnum.Male;
 				uState.AgeOptions = 0;
+				if (MaleRole != null || FemaleRole != null) {
+					var member = Guild.GetMemberAsync(uState.UserId).Result;
+					if (MaleRole != null)
+						member.GrantRoleAsync(MaleRole);
+					if (FemaleRole != null)
+						member.RevokeRoleAsync(FemaleRole);
+				}
 			});
 			answers[1] = new Answer(FemaleEmoji, e => {
 				UserState uState = AddOrGetUserState(e.User);
 				uState.Gender = GenderEnum.Female;
 				uState.AgeOptions = 0;
+				if (MaleRole != null || FemaleRole != null) {
+					var member = Guild.GetMemberAsync(uState.UserId).Result;
+					if (MaleRole != null)
+						member.RevokeRoleAsync(MaleRole);
+					if (FemaleRole != null)
+						member.GrantRoleAsync(FemaleRole);
+				}
 			});
 			for (int i = 2; i < answers.Length; i++) {
 				var index = i;
@@ -250,7 +269,8 @@ namespace DateBot.Base {
 				.ToList()
 				.ForEach(async l => {
 					DateVoiceLobbies.Remove(l);
-					await l.DeleteAsync();
+					if (Guild.Channels.TryGetValue(l.Id, out var channel))
+						await channel.DeleteAsync();
 				});
 			int i = 0;
 			foreach (var l in DateVoiceLobbies.ToArray()) {
@@ -273,6 +293,14 @@ namespace DateBot.Base {
 			if (uState == null) {
 				uState = new UserState() { UserId = User.Id };
 				State.AllUserStates.Add(User.Id, uState);
+				//Add gender based on role, if present
+				if (MaleRole != null || FemaleRole != null) {
+					var member = Guild.GetMemberAsync(uState.UserId).Result;
+					if (MaleRole != null && member.Roles.Contains(MaleRole))
+						uState.Gender = GenderEnum.Male;
+					if (FemaleRole != null && member.Roles.Contains(FemaleRole))
+						uState.Gender = GenderEnum.Female;
+				}
 			}
 			return uState;
 		}
@@ -312,6 +340,7 @@ namespace DateBot.Base {
 
 		internal void StartActivity() {
 			Active = true;
+			_ = TryStartMatchingTask();
 		}
 
 		internal void StopActivity() {
@@ -402,7 +431,7 @@ namespace DateBot.Base {
 		}
 
 		private async Task TryStartMatchingTask(bool force = false) {
-			if (MatchingTask == null) {
+			if (MatchingTask == null || force) {
 				await (MatchingTask = _prepareMatching().ContinueWith(t => {
 					MatchingTask = null;
 				})).ConfigureAwait(false);
@@ -518,9 +547,13 @@ namespace DateBot.Base {
 
 				timeout = _updateTimeout(pair.Users);
 				foreach (var p in pair.Users) {
-					_ = p.SendMessageAsync(
-						$"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for" +
-						$" {string.Join(", ", pair.Users.Select(p => p.DisplayName))}");
+					try {
+						_ = p.SendMessageAsync(
+							$"{(timeout.Value - DateTime.Now).TotalMinutes.ToString("G2")} min left for" +
+							$" {string.Join(", ", pair.Users.Select(p => p.DisplayName))}");
+					} catch (Exception e) { 
+						Console.WriteLine(e.Message);
+					}
 				}
 
 				await Task.Delay(Math.Max((int)(timeout.Value - DateTime.Now).TotalMilliseconds + 100, 0));

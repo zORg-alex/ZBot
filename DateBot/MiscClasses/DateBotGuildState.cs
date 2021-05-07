@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace DateBot.Base {
 	/// <summary>
@@ -25,5 +26,7 @@ namespace DateBot.Base {
 		public string PrivateMessageBody { get; set; }
 		public int SecretRoomTime { get; set; }
 		public Dictionary<ulong, UserState> AllUserStates { get; set; } = new Dictionary<ulong, UserState>();
+		public ulong MaleRoleId { get; set; }
+		public ulong FemaleRoleId { get; set; }
 	}
 }

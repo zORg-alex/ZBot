@@ -104,14 +104,14 @@ namespace DateBot.Base {
 
 			//DebugLogWrite("Initiating Emojis... ");
 			//GetEmojis
-			MaleEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, MaleEmojiId);
-			FemaleEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, FemaleEmojiId);
+			MaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, MaleEmojiId);
+			FemaleEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, FemaleEmojiId);
 			OptionEmojis.Clear();
-			OptionEmojis.AddRange(OptionEmojiIds.Select(id=>DiscordEmoji.FromUnicode(DateBot.Instance.Client, id)));
-			LikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, LikeEmojiId);
-			DisLikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, DisLikeEmojiId);
-			TimeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, TimeEmojiId);
-			CancelLikeEmoji = DiscordEmoji.FromUnicode(DateBot.Instance.Client, CancelLikeEmojiId);
+			OptionEmojis.AddRange(OptionEmojiIds.Select(id=>DiscordEmoji.FromName(DateBot.Instance.Client, id)));
+			LikeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, LikeEmojiId);
+			DisLikeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, DisLikeEmojiId);
+			TimeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, TimeEmojiId);
+			CancelLikeEmoji = DiscordEmoji.FromName(DateBot.Instance.Client, CancelLikeEmojiId);
 
 			//DebugLogWrite("Initiating Users in lobbies... ");
 			//Check and add users in lobbies
