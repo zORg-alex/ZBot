@@ -29,7 +29,7 @@ namespace DateBot.Base {
 		/// <summary>
 		/// Set true if activity is on, in this guild
 		/// </summary>
-		public bool Active { get; private set; }
+		public bool Active { get { return State.Active; } private set { State.Active = value; } }
 		public Task InitTask { get; private set; }
 		public Task CurrentCombLobbiesTask { get; private set; }
 		public Task MatchingTask { get; private set; }
@@ -269,8 +269,10 @@ namespace DateBot.Base {
 				.ToList()
 				.ForEach(async l => {
 					DateVoiceLobbies.Remove(l);
-					if (Guild.Channels.TryGetValue(l.Id, out var channel))
-						await channel.DeleteAsync();
+					try {
+						if (Guild.Channels.TryGetValue(l.Id, out var channel))
+							await channel.DeleteAsync();
+					} catch (Exception e) { }
 				});
 			int i = 0;
 			foreach (var l in DateVoiceLobbies.ToArray()) {
@@ -440,7 +442,7 @@ namespace DateBot.Base {
 
 		private async Task _prepareMatching() {
 			Console.WriteLine("_match waits for delay");
-			await Task.Delay(10000);
+			await Task.Delay(30000);
 			if (!Active) {
 				Console.WriteLine("_match canceled. Active is false");
 				return;

@@ -28,5 +28,6 @@ namespace DateBot.Base {
 		public Dictionary<ulong, UserState> AllUserStates { get; set; } = new Dictionary<ulong, UserState>();
 		public ulong MaleRoleId { get; set; }
 		public ulong FemaleRoleId { get; set; }
+		public bool Active { get; set; }
 	}
 }
