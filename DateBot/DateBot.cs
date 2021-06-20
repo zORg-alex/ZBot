@@ -75,6 +75,12 @@ namespace DateBot.Base {
 			Client.VoiceStateUpdated += Client_VoiceStateUpdated;
 		}
 
+		protected override void CancelSubscriptions() {
+			base.CancelSubscriptions();
+
+			Client.VoiceStateUpdated -= Client_VoiceStateUpdated;
+		}
+
 		/// <summary>
 		/// Add new Guild Task.
 		/// Pickup from where we left off, add all users in lobbies

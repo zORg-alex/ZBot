@@ -34,6 +34,13 @@ namespace DateBot.Base {
 		public Task CurrentCombLobbiesTask { get; private set; }
 		public Task MatchingTask { get; private set; }
 
+		internal async Task Restart() {
+			DialogFramework.CancelQuestion(Guild, WelcomeMessage);
+			DialogFramework.CancelQuestion(Guild, PrivateControlsMessage);
+
+			await Initialize(Bot.Instance.Client).ConfigureAwait(false);
+		}
+
 		/// <summary>
 		/// Start initialization
 		/// </summary>
@@ -70,9 +77,9 @@ namespace DateBot.Base {
 			_dateCategory = cat;
 
 			//Init SecretCategory
-			Guild.Channels.TryGetValue(State.DateCategoryId, out DiscordChannel scat);
+			Guild.Channels.TryGetValue(State.DateSecretCategoryId, out DiscordChannel scat);
 			if (scat == null) {
-				string m = $"Initialize failed. No Category found with id {State.DateCategoryId}";
+				string m = $"Initialize failed. No Category found with id {State.DateSecretCategoryId}";
 				throw new Exception(m);
 			}
 			_dateSecretCategory = scat;
@@ -102,6 +109,23 @@ namespace DateBot.Base {
 			_ = PrivateControlsMessageInit().ConfigureAwait(false);
 
 			if (UsersInLobbies.Count > 0) _ = TryStartMatchingTask();
+		}
+
+		/// <summary>
+		/// Deletes and reinitializes messages to fix issues with reaction ordering or even missing ones
+		/// </summary>
+		/// <param name="client"></param>
+		/// <returns></returns>
+		internal async Task ResetMessages() {
+			try {
+				await WelcomeMessage.DeleteAsync().ConfigureAwait(false);
+			} catch (Exception) { }
+			try {
+				await PrivateControlsMessage.DeleteAsync().ConfigureAwait(false);
+			} catch (Exception) { }
+			_ = WelcomeMessageInit();
+			await Task.Delay(100);
+			_ = PrivateControlsMessageInit();
 		}
 
 		/// <summary>
@@ -328,12 +352,14 @@ namespace DateBot.Base {
 					//Try get timeout
 					if (uState != null && uState.EnteredPrivateRoomTime.HasValue) pair.Timeout = uState.EnteredPrivateRoomTime.Value.AddMilliseconds(State.SecretRoomTime);
 					else pair.Timeout = DateTime.Now;
+					_ = TimeoutDisband(pair);
 					PairsInSecretRooms.Add(pair);
 					//_ = TimeoutDisband(pair)
 						//.ConfigureAwait(false);
 				} else {
 					SecretRooms.Remove(r);
 					try {
+						//Move anyone to voice lobby
 						await r.DeleteAsync().ConfigureAwait(false);
 					} catch (Exception) { }
 				}

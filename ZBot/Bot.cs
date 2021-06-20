@@ -71,6 +71,9 @@ namespace ZBot {
 			await Client.ConnectAsync();
 		}
 
+
+		protected virtual void CancelSubscriptions() { }
+
 		public virtual void RegisterCommands() {}
 
 		/// <summary>

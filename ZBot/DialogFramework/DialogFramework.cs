@@ -114,8 +114,10 @@ namespace ZBot.DialogFramework {
 				Bot.Instance.Client.MessageCreated += MessageAdded;
 			Bot.Instance.Client.MessageDeleted += OnDeleted;
 
-
-			//cancellationToken.Register(UnsubscribeAndDismiss().Wait);
+			OnCancel += (g, m) => {
+				if (g.Id == channel.Guild.Id && m.Id == Question.Id)
+					_ = UnsubscribeAndDismiss(true);
+			};
 
 			//Do I need to even start it in case of Permanent behavior?
 			timeoutTimer.Start();
@@ -195,10 +197,10 @@ namespace ZBot.DialogFramework {
 						TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 			}
 
-			async Task UnsubscribeAndDismiss() {
+			async Task UnsubscribeAndDismiss(bool force = false) {
 				if (unsubscribed) return;
 				unsubscribed = true;
-				if (behavior != MessageBehavior.Permanent) {
+				if (behavior != MessageBehavior.Permanent || force) {
 					//Can I unsubscribe if not even subscribed?
 					Bot.Instance.Client.MessageReactionAdded -= ReactionAdded;
 					Bot.Instance.Client.MessageCreated -= MessageAdded;
@@ -218,6 +220,11 @@ namespace ZBot.DialogFramework {
 				Bot.Instance.Client.MessageCreated -= MessageAdded;
 				return Task.CompletedTask;
 			}
+		}
+
+		private static event Action<DiscordGuild, DiscordMessage> OnCancel;
+		public static void CancelQuestion(DiscordGuild Guild, DiscordMessage Message) {
+			OnCancel.Invoke(Guild, Message);
 		}
 
 		/// <summary>
@@ -271,6 +278,11 @@ namespace ZBot.DialogFramework {
 			Bot.Instance.Client.MessageCreated += MessageAdded;
 			Bot.Instance.Client.MessageDeleted += OnDeleted;
 
+			OnCancel += (g, m) => {
+				if (g.Id == channel.Guild.Id && m.Id == Question.Id)
+					_ = UnsubscribeAndDismiss(true);
+			};
+
 			//cancellationToken.Register(UnsubscribeAndDismiss().Wait);
 			//Do I need to even start it in case of Permanent behavior?
 			timeoutTimer.Start();
@@ -308,7 +320,7 @@ namespace ZBot.DialogFramework {
 				return Task.CompletedTask;//Nice hack, thank's VS
 			}
 
-			async Task UnsubscribeAndDismiss() {
+			async Task UnsubscribeAndDismiss(bool force = false) {
 				if (unsubscribed) return;
 				unsubscribed = true;
 				if (behavior != MessageBehavior.Permanent) {

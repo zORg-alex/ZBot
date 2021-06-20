@@ -43,6 +43,21 @@ namespace DateBot.Base {
 				uState.AddLike(likedIds);
 			}
 		}
+		[Description("In case welcome and control messages get reactions out of order or missing, this will reset messages completely.")]
+		[Command("fix")]
+		public async Task FixMessages(CommandContext ctx) {
+			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
+			_ = gt.ResetMessages();
+			await ctx.Message.DeleteAsync();
+		}
+
+		[Command("restart")]
+		public async Task Restart(CommandContext ctx) {
+			var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
+			_ = ctx.Message.DeleteAsync();
+			await gt.Restart().ConfigureAwait(false);
+		}
+
 		[Command("config")]
 		public async Task DialogConfig(CommandContext ctx) {
 			//We need to set quite a few things in this menu, so it is broken down to smaller bits.
@@ -103,10 +118,10 @@ namespace DateBot.Base {
 				}),
 				new Answer(EmojiProvider.ArrowsClockwise,e=>{
 					var gt = DateBot.Instance.GetGuildTask(ctx.Guild.Id);
-					_ = gt.Initialize(ctx.Client);
+					_ = gt.ResetMessages();
 				}),
 				new Answer(EmojiProvider.CrossOnGreen,e=>{
-					DialogFramework.QuickVolatileMessage(ctx.Channel, "Thank you for interaction, bye.");
+					_ = DialogFramework.QuickVolatileMessage(ctx.Channel, "Thank you for interaction, bye.");
 				}),
 				new Answer(EmojiProvider.Zero, e=>{
 					_ = GiveRolesAsync(ctx);
